@@ -1,1 +1,82 @@
+# =========================
+# Build directories
+# =========================
 build/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# =========================
+# CMake generated files
+# =========================
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+
+# =========================
+# Compiled object files
+# =========================
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.dylib
+*.exe
+*.out
+
+# =========================
+# Debug / temp files
+# =========================
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# =========================
+# GDB / LLDB
+# =========================
+core
+core.*
+vgcore.*
+
+# =========================
+# VSCode
+# =========================
+.vscode/
+
+# =========================
+# CLion / JetBrains
+# =========================
+.idea/
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+
+# =========================
+# Linux
+# =========================
+.cache/
+
+# =========================
+# Coverage
+# =========================
+*.gcda
+*.gcno
+*.gcov
+coverage/
+
+# =========================
+# clangd / lsp
+# =========================
+.clangd/
+.cache/
