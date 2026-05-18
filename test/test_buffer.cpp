@@ -22,17 +22,24 @@ int main(){
     // cout << buffer.AfterRemainSize() << endl;
 
     // cout << buffer.RemainSize() << endl;
-    std::string str;
+    // std::string str;
 
-    for(int i = 1; i <= 1025; ++i)
-        str += "a";
-    buffer.WriteStringData(str);
+    // for(int i = 1; i <= 1025; ++i)
+    //     str += "a";
+    // buffer.WriteStringData(str);
 
-    std::string res = buffer.ReadData(10);
-    cout << res << endl;
+    // std::string res = buffer.ReadData(10);
+    // cout << res << endl;
+    
     // cout << buffer.GetReadPos() << endl;
     // cout << buffer.GetWritePos() << endl;
 
     // cout << buffer.ReadableSize() << endl;
     // cout << buffer.AfterRemainSize() << endl;
+
+    std::string str = "abcdefg";
+    buffer.Append(str);
+
+    std::string res = buffer.RetrieveAllAsString();
+    cout << res << endl;
 }
