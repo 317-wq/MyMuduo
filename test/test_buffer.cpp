@@ -28,9 +28,11 @@ int main(){
         str += "a";
     buffer.WriteStringData(str);
 
-    cout << buffer.GetReadPos() << endl;
-    cout << buffer.GetWritePos() << endl;
+    std::string res = buffer.ReadData(10);
+    cout << res << endl;
+    // cout << buffer.GetReadPos() << endl;
+    // cout << buffer.GetWritePos() << endl;
 
-    cout << buffer.ReadableSize() << endl;
-    cout << buffer.AfterRemainSize() << endl;
+    // cout << buffer.ReadableSize() << endl;
+    // cout << buffer.AfterRemainSize() << endl;
 }

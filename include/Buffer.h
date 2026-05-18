@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstring>
 #include <string>
+#include <iostream>
 
 class Buffer{
 private:
@@ -110,16 +111,19 @@ public:
     size_t RemainSize();
 
     // 从缓冲区里面读固定长度数据
-    void ReadData(char* buffer, size_t len);
+    std::string ReadData(size_t len);
 
     // 写入C风格的字符串
-    void WriteCstrData(const char* data);
+    void WriteCstrData(const char *data);
 
     // 写入string类型的字符串
     void WriteStringData(const std::string& data);
 
     // 清空缓冲区[内存大小不清空]
     void Clear();
+
+    // 获取数据区的头指针位置
+    const char* Peek();
 
     // vector自动析构
     ~Buffer() = default;
