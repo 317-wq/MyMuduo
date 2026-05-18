@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(MyMuduo)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 # 添加头文件查询
