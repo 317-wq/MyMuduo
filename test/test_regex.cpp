@@ -18,12 +18,12 @@ int main() {
     std::smatch match;
 
     if (std::regex_search(testRequest, match, httpRegex)) {
-        std::cout << "✅ 匹配成功\n";
+        std::cout << "匹配成功\n";
         std::cout << "HTTP 方法: " << match[1] << "\n";
         std::cout << "请求路径: " << match[2] << "\n";
         std::cout << "Host: " << match[3] << "\n";
     } else {
-        std::cout << "❌ 未匹配\n";
+        std::cout << "未匹配\n";
     }
 
     return 0;
