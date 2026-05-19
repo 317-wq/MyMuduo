@@ -52,6 +52,22 @@ add_executable(test_acceptor_client
     src/Acceptor.cpp
 )
 
+add_executable(test_connector
+    test/test_connector.cpp
+    src/Socket.cpp
+    src/InetAddress.cpp
+    src/Acceptor.cpp
+    src/Connector.cpp
+)
+
+add_executable(test_connector_client
+    test/test_connector_client.cpp
+    src/Socket.cpp
+    src/InetAddress.cpp
+    src/Acceptor.cpp
+    src/Connector.cpp
+)
+
 # # Logger 测试
 # add_executable(log_test test/log_test.cpp)
 # target_link_libraries(log_test pthread)

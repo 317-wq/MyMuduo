@@ -56,8 +56,8 @@ int Socket::Accept(std::string *client_ip, Socket::u16 *client_port) {
 }
 
 // 客户端向服务端发起连接请求
-bool Socket::Connect(const InetAddress &peer) {
-    return connect(_fd, peer.Addr(), peer.Length()) >= 0;
+bool Socket::Connect(const InetAddress &server) {
+    return connect(_fd, server.Addr(), server.Length()) >= 0;
 }
 
 // 获取文件描述符
