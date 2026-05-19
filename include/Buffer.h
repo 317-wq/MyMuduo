@@ -15,7 +15,11 @@
 #include <string>
 #include <iostream>
 
-class Buffer{
+#include "NoCopy.h"
+
+// 先设置成禁止拷贝，后面再看
+
+class Buffer : public NoCopy {
 private:
     inline static constexpr size_t DEFAULT_BUFFER_SIZE = 1024;
 
