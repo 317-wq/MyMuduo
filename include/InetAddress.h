@@ -9,21 +9,19 @@
 #include <string>
 #include <cstring>
 
-#include "NoCopy.h"
-
-class InetAddress : public NoCopy {
+class InetAddress{
 private:
     sockaddr_in _addr; // 网络地址信息
 
 private:
     using u16 = uint16_t;
-    static const u16 DEFAULT_PORT = 8888;
+    // static const u16 DEFAULT_PORT = 8888;
 public:
     // 空初始化
     InetAddress();
 
     // port初始化，服务端 -> 禁止编译器进行隐式类型化转换
-    explicit InetAddress(u16 port = DEFAULT_PORT);
+    explicit InetAddress(u16 port);
 
     // ip:port初始化，客户端，提取客户端信息
     InetAddress(const std::string &ip, u16 port);

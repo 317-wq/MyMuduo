@@ -1,29 +1,47 @@
 #include "../include/Socket.h"
 
 // 初始化列表
-Socket::Socket(): _fd(-1) {}
+Socket::Socket(): _fd(socket(AF_INET, SOCK_STREAM, 0)) {
+    if(_fd < 0)
+        perror("socket");
+}
 
 // 直接用fd构造
 Socket::Socket(int fd): _fd(fd) {}
 
 // 绑定地址信息
 bool Socket::Bind(const InetAddress &addr) {
-    bind(_fd, addr.Addr(), addr.Length());
+    return bind(_fd, addr.Addr(), addr.Length()) >= 0;
 }
 
 // 监听连接
-bool Socket::Listen() {
-
+bool Socket::Listen(int backlog) {
+    return listen(_fd, backlog) >= 0;
 }
 
-// 获取新连接
-int Socket::Accept() {
+// 获取新连接 -> 输出型参数
+int Socket::Accept(InetAddress *client) {
+    while(true){
+        // socklen_t len = client->Length();
+        socklen_t len = sizeof(sockaddr_in);
+        int fd = accept(_fd, client->Addr(), &len);
 
+        if(fd >= 0)
+            return fd; // 合法
+        
+        // fd = -1的时候，不一定是错误，在非阻塞环境下
+        if(errno == EINTR)
+            continue; // 信号中断。重试
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0; // 现在没有新连接
+        
+        return -1; // 错误
+    }
 }
 
 // 客户端向服务端发起连接请求
-bool Socket::Connect() {
-
+bool Socket::Connect(const InetAddress &peer) {
+    return connect(_fd, peer.Addr(), peer.Length()) >= 0;
 }
 
 // 获取文件描述符
@@ -31,7 +49,7 @@ int Socket::Fd() const { return _fd; }
 
 // 关闭套接字
 void Socket::Close() {
-    if(_fd > 0){
+    if(_fd >= 0){
         close(_fd);
         _fd = -1;
     }

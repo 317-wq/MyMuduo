@@ -16,6 +16,9 @@
 class Socket : public NoCopy {
 private:
     int _fd;
+private:
+    static const int BACK_LOG = 10; // 最大连接数量
+
 public:
     using Ptr = std::shared_ptr<Socket>;
 
@@ -29,13 +32,13 @@ public:
     bool Bind(const InetAddress& addr);
 
     // 监听连接
-    bool Listen();
+    bool Listen(int backlog = BACK_LOG);
 
     // 获取新连接
-    int Accept();
+    int Accept(InetAddress *peer);
 
     // 客户端向服务端发起连接请求
-    bool Connect();
+    bool Connect(const InetAddress& client);
 
     // 获取文件描述符
     int Fd() const;
