@@ -21,6 +21,11 @@ add_executable(test_log
     src/Log.cpp
 )
 
+add_executable(test_inetaddress
+    test/test_inetaddress.cpp
+    src/InetAddress.cpp
+)
+
 # # Logger 测试
 # add_executable(log_test test/log_test.cpp)
 # target_link_libraries(log_test pthread)
