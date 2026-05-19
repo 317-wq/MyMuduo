@@ -16,6 +16,10 @@ add_executable(test_buffer
     src/Buffer.cpp
 )
 
+add_executable(test_log
+    test/test_log.cpp
+    src/Log.cpp
+)
 
 # # Logger 测试
 # add_executable(log_test test/log_test.cpp)
