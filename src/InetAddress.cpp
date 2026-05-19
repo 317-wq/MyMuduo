@@ -21,7 +21,9 @@ InetAddress::InetAddress(const std::string &ip, u16 port){
 }
 
 // 获取原始地址信息
-sockaddr *InetAddress::Addr() const{ return (sockaddr*)&_addr; }
+sockaddr *InetAddress::Addr() { return (sockaddr*)&_addr; }
+
+const sockaddr *InetAddress::Addr() const { return (sockaddr*)&_addr; }
 
 // 获取地址长度
 socklen_t InetAddress::Length() const{ return sizeof(_addr); }

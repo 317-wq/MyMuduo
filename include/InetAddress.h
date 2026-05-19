@@ -29,7 +29,9 @@ public:
     InetAddress(const std::string &ip, u16 port);
 
     // 获取原始地址
-    sockaddr* Addr() const;
+    sockaddr* Addr();
+
+    const sockaddr* Addr() const;
 
     // 获取地址长度
     socklen_t Length() const;
