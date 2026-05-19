@@ -14,6 +14,11 @@ bool Socket::Bind(const InetAddress &addr) {
     return bind(_fd, addr.Addr(), addr.Length()) >= 0;
 }
 
+bool Socket::Bind(Socket::u16 port){
+    InetAddress local(port);
+    return bind(_fd, local.Addr(), local.Length());
+}
+
 // 监听连接
 bool Socket::Listen(int backlog) {
     return listen(_fd, backlog) >= 0;
@@ -37,6 +42,17 @@ int Socket::Accept(InetAddress *client) {
         
         return -1; // 错误
     }
+}
+
+int Socket::Accept(std::string *client_ip, Socket::u16 *client_port) {
+    InetAddress client;
+    int fd = Accept(&client);
+    if(fd > 0){
+        // 合法的连接
+        if(client_ip) *client_ip = client.Ip();
+        if(client_port) *client_port = client.Port();
+    }
+    return fd;
 }
 
 // 客户端向服务端发起连接请求

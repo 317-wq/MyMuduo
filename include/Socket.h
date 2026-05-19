@@ -17,6 +17,7 @@ class Socket : public NoCopy {
 private:
     int _fd;
 private:
+    using u16 = uint16_t;
     static const int BACK_LOG = 10; // 最大连接数量
 
 public:
@@ -31,11 +32,14 @@ public:
     // 绑定地址信息
     bool Bind(const InetAddress& addr);
 
+    bool Bind(u16 port);
+
     // 监听连接
     bool Listen(int backlog = BACK_LOG);
 
     // 获取新连接
     int Accept(InetAddress *peer);
+    int Accept(std::string *client_ip, Socket::u16 *client_port);
 
     // 客户端向服务端发起连接请求
     bool Connect(const InetAddress& client);
