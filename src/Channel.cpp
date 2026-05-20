@@ -1,14 +1,14 @@
 #include "../include/Channel.h"
 
 Channel::Channel(int fd)
-    : _fd(fd), _events(0), _revents(0), _loop(std::make_shared<EventLoop>())
+    : _fd(fd), _events(0), _revents(0), _loop(std::make_shared<EventLoop>().get())
 {}
 
 int Channel::Fd() const { return _fd; }
-Channel::u32 Channel::Event() const { return _events; }
-Channel::u32 Channel::Revent() const { return _revents; }
+Channel::u32 Channel::Events() const { return _events; }
+Channel::u32 Channel::Revents() const { return _revents; }
 
-void Channel::SetREvent(Channel::u32 event) { _revents = event; }
+void Channel::SetREvents(Channel::u32 event) { _revents = event; }
 
 void Channel::SetReadCallback(Channel::EventCallback read_cb) { _read_cb = std::move(read_cb); }
 void Channel::SetWriteCallback(Channel::EventCallback write_cb) { _write_cb = std::move(write_cb); }
@@ -18,21 +18,21 @@ void Channel::SetEventCallback(Channel::EventCallback event_cb) { _event_cb = st
 
 void Channel::EnableRead() { 
     _events |= EPOLLIN;
-    UpdateEvent();
+    Update();
 }
 void Channel::EnableWrite() {
     _events |= EPOLLOUT;
-    UpdateEvent();
+    Update();
 }
 
 void Channel::DisableRead() {
     _events &= ~EPOLLIN; 
-    UpdateEvent();
+    Update();
 }
 
 void Channel::DisableWrite() {
     _events &= ~EPOLLOUT;
-    UpdateEvent();
+    Update();
 }
 
 void Channel::DisableAll() { _events = 0; }
@@ -65,15 +65,9 @@ void Channel::HandleEvent(){
         _event_cb();
 }
 
-// void Close();
-
 // EventLoop来管理这些操作
-void Channel::UpdateEvent(){
-    _loop->Update();
-}
-
-void Channel::RemoveEvent(){
-    _loop->Update();
+void Channel::Update(){
+    _loop->UpdateChannel(this);
 }
 
 Channel::~Channel() = default;

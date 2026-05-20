@@ -16,8 +16,10 @@
 class Channel{
 private:
     using EventCallback = std::function<void()>;
-    using Ptr = std::shared_ptr<Channel>;
     using u32 = uint32_t;
+
+public:
+    using Ptr = std::shared_ptr<Channel>;
 
 private:
     int _fd;
@@ -29,15 +31,15 @@ private:
     EventCallback _close_cb; // 关闭事件回调
     EventCallback _event_cb; // 任意事件回调
 
-    EventLoop::Ptr _loop; // 后续将数据注册到内核里面，就是职责分开，实际上还是调用epoll_ctl
+    EventLoop* _loop; // 后续将数据注册到内核里面，就是职责分开，实际上还是调用epoll_ctl
 public:
     explicit Channel(int fd);
 
     int Fd() const;
-    u32 Event() const;
-    u32 Revent() const;
+    u32 Events() const;
+    u32 Revents() const;
 
-    void SetREvent(u32 event);
+    void SetREvents(u32 event);
 
     void SetReadCallback(EventCallback read_cb);
     void SetWriteCallback(EventCallback write_cb);
@@ -59,12 +61,8 @@ public:
     // 根据_revents处理事件
     void HandleEvent();
 
-    // void Close();
-
     // EventLoop来管理这些操作
-    void UpdateEvent();
-
-    void RemoveEvent();
+    void Update();
 
     ~Channel();
 };
