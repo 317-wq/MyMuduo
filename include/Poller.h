@@ -19,18 +19,18 @@ public:
 
 public:
     Poller();
-    
+
     // 事件等待 + 存储活跃连接
-    virtual void Poll(int timeout) = 0;
+    virtual void Poll(ChannelList* active_channels, int timeout) = 0;
 
     // 添加监听对象
-    virtual void AddChannel() = 0;
+    virtual void AddChannel(Channel* channel) = 0;
 
     // 更新监听对象
-    virtual void UpdateChannel() = 0;
+    virtual void UpdateChannel(Channel* channel) = 0;
 
     // 删除监听对象
-    virtual void RemoveChannel() = 0;
+    virtual void RemoveChannel(Channel* channel) = 0;
 
     virtual ~Poller();
 };
