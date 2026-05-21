@@ -17,5 +17,11 @@ private:
 public:
     EventLoop();
     void UpdateChannel(Channel* channel);
+
+    // 添加 Channel 并设置其 loop 指针
+    void AddChannel(Channel* channel);
+
+    Poller::Ptr GetPoller() const { return _poller; }
+
     ~EventLoop();
 };
