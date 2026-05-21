@@ -68,6 +68,26 @@ add_executable(test_connector_client
     src/Connector.cpp
 )
 
+# [TEST-ADD] Channel + EpollPoller + EventLoop 模块测试
+add_executable(test_epoll_poller
+    test/test_epoll_poller.cpp
+    src/Channel.cpp
+    src/Poller.cpp
+    src/EpollPoller.cpp
+    src/EventLoop.cpp
+)
+
+# [TEST-ADD] TCP服务端-客户端测试
+add_executable(test_tcp_server
+    test/test_tcp_server.cpp
+    src/Channel.cpp
+    src/Poller.cpp
+    src/EpollPoller.cpp
+    src/EventLoop.cpp
+    src/Socket.cpp
+    src/InetAddress.cpp
+)
+
 # # Logger 测试
 # add_executable(log_test test/log_test.cpp)
 # target_link_libraries(log_test pthread)
