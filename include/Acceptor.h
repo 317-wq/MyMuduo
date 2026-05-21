@@ -19,4 +19,7 @@ public:
     // 返回新连接的文件描述符fd
     int Accept(InetAddress *client);
     int Accept(std::string *client_ip, u16 *client_port);
+
+    // 获取监听socket的fd
+    int Fd() const;
 };

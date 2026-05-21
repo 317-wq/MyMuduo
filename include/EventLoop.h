@@ -21,7 +21,13 @@ public:
     // 添加 Channel 并设置其 loop 指针
     void AddChannel(Channel* channel);
 
-    Poller::Ptr GetPoller() const { return _poller; }
+    // Poller::Ptr GetPoller() const { return _poller; }
+
+    // 删除 Channel
+    void RemoveChannel(Channel* channel);
+
+    // 事件等待 + 返回活跃连接
+    void Poll(ChannelList* active_channels, int timeout);
 
     ~EventLoop();
 };

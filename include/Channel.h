@@ -64,7 +64,7 @@ public:
     void Update();
 
     // 设置所属的 EventLoop
-    void SetLoop(EventLoop* loop) { _loop = loop; }
+    void SetLoop(EventLoop* loop);
 
     ~Channel();
 };

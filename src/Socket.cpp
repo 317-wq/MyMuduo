@@ -57,7 +57,15 @@ int Socket::Accept(std::string *client_ip, Socket::u16 *client_port) {
 
 // 客户端向服务端发起连接请求
 bool Socket::Connect(const InetAddress &server) {
-    return connect(_fd, server.Addr(), server.Length()) >= 0;
+    int ret = connect(_fd, server.Addr(), server.Length());
+    if (ret >= 0) {
+        return true;
+    }
+    // 非阻塞模式下，EINPROGRESS 表示连接正在进行中
+    if (errno == EINPROGRESS) {
+        return true;
+    }
+    return false;
 }
 
 // 获取文件描述符

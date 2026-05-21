@@ -24,3 +24,8 @@ int Acceptor::Accept(InetAddress *client){
 int Acceptor::Accept(std::string *client_ip, Acceptor::u16 *client_port){
     return _listen_sock->Accept(client_ip, client_port);
 }
+
+// 获取监听socket的fd
+int Acceptor::Fd() const { 
+    return _listen_sock->Fd(); 
+}

@@ -20,6 +20,17 @@ void EventLoop::AddChannel(Channel* channel){
     _poller->AddChannel(channel);
 }
 
+// 删除 Channel
+void EventLoop::RemoveChannel(Channel *channel){
+    if(_poller)
+        _poller->RemoveChannel(channel);
+}
+
+void EventLoop::Poll(ChannelList* active_channels, int timeout){
+    if(_poller)
+        _poller->Poll(active_channels, timeout);
+}
+
 EventLoop::~EventLoop(){
 
 }

@@ -86,6 +86,8 @@ add_executable(test_tcp_server
     src/EventLoop.cpp
     src/Socket.cpp
     src/InetAddress.cpp
+    src/Acceptor.cpp
+    src/Connector.cpp
 )
 
 # # Logger 测试
