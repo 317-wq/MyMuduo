@@ -9,9 +9,8 @@
 #include <functional>
 #include <memory>
 #include <sys/epoll.h>
-#include "EventLoop.h"
 
-// class EventLoop;
+class EventLoop;
 
 class Channel{
 private:
@@ -63,6 +62,9 @@ public:
 
     // EventLoop来管理这些操作
     void Update();
+
+    // 设置所属的 EventLoop
+    void SetLoop(EventLoop* loop) { _loop = loop; }
 
     ~Channel();
 };

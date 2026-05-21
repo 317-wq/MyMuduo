@@ -1,7 +1,8 @@
 #include "../include/Channel.h"
+#include "../include/EventLoop.h"
 
 Channel::Channel(int fd)
-    : _fd(fd), _events(0), _revents(0), _loop(std::make_shared<EventLoop>().get())
+    : _fd(fd), _events(0), _revents(0), _loop(nullptr)
 {}
 
 int Channel::Fd() const { return _fd; }
@@ -20,6 +21,7 @@ void Channel::EnableRead() {
     _events |= EPOLLIN;
     Update();
 }
+
 void Channel::EnableWrite() {
     _events |= EPOLLOUT;
     Update();
@@ -35,7 +37,10 @@ void Channel::DisableWrite() {
     Update();
 }
 
-void Channel::DisableAll() { _events = 0; }
+void Channel::DisableAll() { 
+    _events = 0; 
+    Update(); // [FIX-7] 需要更新到内核
+}
 
 bool Channel::ReadAble() const { return _events & EPOLLIN; }
 bool Channel::WriteAble() const { return _events & EPOLLOUT; }
@@ -67,7 +72,13 @@ void Channel::HandleEvent(){
 
 // EventLoop来管理这些操作
 void Channel::Update(){
-    _loop->UpdateChannel(this);
+    // 添加空指针检查，避免未设置 loop 时崩溃
+    if (_loop) {
+        _loop->UpdateChannel(this);
+    }
 }
+
+// 设置所属的 EventLoop
+void Channel::SetLoop(EventLoop *loop) { _loop = loop; }
 
 Channel::~Channel() = default;
