@@ -1,5 +1,19 @@
 #include "../include/EpollPoller.h"
 
+// 判断监听对象是否存在hash表中
+bool EpollPoller::ExistChannel(Channel* channel) const {
+    return _channels.find(channel->Fd()) != _channels.end();
+}
+
+
+// 添加监听对象
+void EpollPoller::AddChannel(Channel* channel){
+    // 成功后再记录
+    Update(EPOLL_CTL_ADD, channel);
+    // 添加到hash表里面
+    _channels[channel->Fd()] = channel;
+}
+
 void EpollPoller::Update(int op, Channel* channel){
     epoll_event ev;
     ev.events = channel->Events();
@@ -16,6 +30,10 @@ EpollPoller::EpollPoller()
     // 其他进程调用fork，exec的时候
     // 内核自动关闭epoll实例，避免epoll文件描述符泄露
     _epfd = epoll_create1(EPOLL_CLOEXEC);
+    if(_epfd < 0){
+        perror("epoll_create1");
+        abort();
+    }
 }
 
 // 事件等待 + 存储活跃连接
@@ -24,7 +42,7 @@ void EpollPoller::Poll(ChannelList* active_channels, int timeout){
     
     // 扩容
     int size = _events.size();
-    while(num > size){
+    if(num == size){
         size *= 2;
     }
     if(size != _events.size())
@@ -37,25 +55,19 @@ void EpollPoller::Poll(ChannelList* active_channels, int timeout){
     FillActiveChannels(active_channels, num);
 }
 
-// 添加监听对象
-void EpollPoller::AddChannel(Channel* channel){
-    // 添加到hash表里面
-    _channels[channel->Fd()] = channel;
-    Update(EPOLL_CTL_ADD, channel);
-}
-
 // 更新监听对象
 void EpollPoller::UpdateChannel(Channel* channel){
-    Update(EPOLL_CTL_MOD, channel);
+    if(ExistChannel(channel))
+        Update(EPOLL_CTL_MOD, channel);
+    else AddChannel(channel);
 }
 
 // 删除监听对象
 void EpollPoller::RemoveChannel(Channel* channel){
-    auto it = _channels.find(channel->Fd());
-    if(it == _channels.end())
-        return;
-    _channels.erase(it);
-    Update(EPOLL_CTL_DEL, channel);
+    if(ExistChannel(channel)){
+        Update(EPOLL_CTL_DEL, channel);
+        _channels.erase(channel->Fd());
+    }
 }
 
 EpollPoller::~EpollPoller(){

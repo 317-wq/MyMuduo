@@ -24,7 +24,7 @@ public:
     virtual void Poll(ChannelList* active_channels, int timeout) = 0;
 
     // 添加监听对象
-    virtual void AddChannel(Channel* channel) = 0;
+    // virtual void AddChannel(Channel* channel) = 0;
 
     // 更新监听对象
     virtual void UpdateChannel(Channel* channel) = 0;

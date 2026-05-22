@@ -32,7 +32,9 @@ private:
 
     EventLoop* _loop; // 后续将数据注册到内核里面，就是职责分开，实际上还是调用epoll_ctl
 public:
-    explicit Channel(int fd);
+    // explicit Channel(int fd);
+
+    Channel(EventLoop* loop, int fd);
 
     int Fd() const;
     u32 Events() const;
@@ -64,7 +66,7 @@ public:
     void Update();
 
     // 设置所属的 EventLoop
-    void SetLoop(EventLoop* loop);
+    // void SetLoop(EventLoop* loop);
 
     ~Channel();
 };

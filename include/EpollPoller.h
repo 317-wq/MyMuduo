@@ -20,9 +20,15 @@ private:
     std::vector<epoll_event> _events;
 
 private:
+    // 判断监听对象是否存在hash表中
+    bool ExistChannel(Channel* channel) const;
+    
     // 单独封装epoll_ctl
     void Update(int fd, Channel* channel);
 
+    // 添加监听对象
+    void AddChannel(Channel* channel);
+    
 public:
     EpollPoller();
 
@@ -34,9 +40,6 @@ public:
         >0 : 超时时间
     */
     void Poll(ChannelList* active_channels, int timeout);
-
-    // 添加监听对象
-    void AddChannel(Channel* channel);
 
     // 更新监听对象
     void UpdateChannel(Channel* channel);

@@ -1,8 +1,12 @@
 #include "../include/Channel.h"
 #include "../include/EventLoop.h"
 
-Channel::Channel(int fd)
-    : _fd(fd), _events(0), _revents(0), _loop(nullptr)
+// Channel::Channel(int fd)
+//     : _fd(fd), _events(0), _revents(0), _loop(nullptr)
+// {}
+
+Channel::Channel(EventLoop* loop, int fd)
+    : _fd(fd), _events(0), _revents(0), _loop(loop)
 {}
 
 int Channel::Fd() const { return _fd; }
@@ -79,6 +83,6 @@ void Channel::Update(){
 }
 
 // 设置所属的 EventLoop
-void Channel::SetLoop(EventLoop *loop) { _loop = loop; }
+// void Channel::SetLoop(EventLoop *loop) { _loop = loop; }
 
 Channel::~Channel() = default;
