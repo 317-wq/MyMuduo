@@ -82,6 +82,12 @@ void Channel::Update(){
     }
 }
 
+void Channel::Remove(){
+    if(_loop){
+        _loop->RemoveChannel(this);
+    }
+}
+
 // 设置所属的 EventLoop
 // void Channel::SetLoop(EventLoop *loop) { _loop = loop; }
 

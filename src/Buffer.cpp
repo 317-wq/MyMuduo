@@ -1,26 +1,5 @@
 #include "Buffer.h"
 
-// // 写入C风格的字符串
-// void Buffer::WriteCstrData(const char *data) { WriteData(data, strlen(data)); }
-
-// // 写入string类型的字符串
-// void Buffer::WriteStringData(const std::string &data) { WriteData(data.c_str(), data.size()); }
-
-// // 读固定长度的数据
-// std::string Buffer::ReadData(size_t len)
-// {
-//     len = std::min(len, ReadableSize());
-
-//     std::string result(Peek(), len);
-
-//     _read_pos += len;
-
-//     if(_read_pos == _write_pos)
-//         Clear();
-
-//     return result;
-// }
-
 // 获取数据区的头指针位置
 const char *Buffer::Peek() { return _buffer.data() + _read_pos; }
 
@@ -62,3 +41,12 @@ void Buffer::Append(const void *str, size_t len){
 void Buffer::Append(const std::string &str){
     Append(str.data(), str.size());
 }
+
+// 获取缓冲区大小
+size_t Buffer::BufferSize() { return _buffer.size(); }
+
+// 可读数据区大小
+size_t Buffer::ReadableSize() { return GetWritePos() - GetReadPos(); }
+
+// 计算缓冲区的剩余空间大小
+size_t Buffer::RemainSize() { return FrontRemainSize() + AfterRemainSize(); }

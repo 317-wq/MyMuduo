@@ -38,11 +38,11 @@ public:
     bool Listen(int backlog = BACK_LOG);
 
     // 获取新连接
-    int Accept(InetAddress *server);
+    int Accept(InetAddress *client);
     int Accept(std::string *client_ip, Socket::u16 *client_port);
 
     // 客户端向服务端发起连接请求
-    bool Connect(const InetAddress& client);
+    bool Connect(const InetAddress& server);
 
     // 获取文件描述符
     int Fd() const;

@@ -15,6 +15,7 @@ public:
     using u64 = uint64_t; // eventfd 默认一次是8个字节
     using ChannelList = std::vector<Channel*>;
     using Functor = std::function<void()>;
+    using FunctorList = std::vector<Functor>;
 
 private:
     std::atomic<bool> _running;
@@ -23,7 +24,7 @@ private:
     std::thread::id _thread_id;
     int _wakeup_fd; // 唤醒线程fd
     std::unique_ptr<Channel> _wakeup_channel; // 只有一个拥有者
-    std::vector<Functor> _pending_functors; // 任务队列
+    FunctorList _pending_functors; // 任务队列
     std::mutex _mutex;
 
 private:
@@ -56,7 +57,7 @@ public:
     bool IsInLoopThread() const;
 
     // 执行任务队列
-    void DoPendindFunctors();
+    void DoPendingFunctors();
 
     // 存储进任务队列
     void QueueInLoop(Functor func);

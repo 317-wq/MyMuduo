@@ -2,7 +2,7 @@
 
 // 初始化监听对象
 Acceptor::Acceptor(const InetAddress &client, bool non_block)
-    : _listen_sock(std::make_shared<Socket>())
+    : _listen_sock(std::make_unique<Socket>())
 {
     _listen_sock->SetReuseAddr();
     _listen_sock->SetReusePort();

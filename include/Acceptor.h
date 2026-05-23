@@ -10,7 +10,7 @@ class Acceptor {
 private:
     using u16 = uint16_t;
 private:
-    Socket::Ptr _listen_sock;
+    std::unique_ptr<Socket> _listen_sock;
 public:
     // 初始化监听对象 -> true为非阻塞
     Acceptor(const InetAddress &client, bool non_block = true);

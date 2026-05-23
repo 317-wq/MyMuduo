@@ -3,7 +3,8 @@
 /*
     对于某一个监听对象的事件的管理，设置，启动，关闭等，不需要进行事件更新的操作
     管理事件回调
-    通知EventLoop更新事件
+    通知EventLoop更新事件，Channel是在用户层面上对于这个事件进行管理，
+    EventLoop则是调用Poller去在内核里面进行更新
 */
 
 #include <functional>
@@ -65,6 +66,8 @@ public:
     // EventLoop来管理这些操作
     void Update();
 
+    void Remove();
+    
     // 设置所属的 EventLoop
     // void SetLoop(EventLoop* loop);
 

@@ -36,36 +36,17 @@ private:
     // 清空缓冲区[内存大小不清空]
     void Clear() { _write_pos = _read_pos = 0; }
 
-    // 获取缓冲区大小
-    size_t BufferSize() { return _buffer.size(); }
-
-    // 可读数据区大小
-    size_t ReadableSize() { return GetWritePos() - GetReadPos(); }
-
     // 计算前置剩余空间大小
     size_t FrontRemainSize() { return GetReadPos(); }
 
     // 计算后置剩余空间大小
     size_t AfterRemainSize() { return BufferSize() - GetWritePos(); }
 
-    // 计算缓冲区的剩余空间大小
-    size_t RemainSize() { return FrontRemainSize() + AfterRemainSize(); }
-
     // 获取读指针当前的偏移量
     size_t GetReadPos() { return _read_pos; }
 
     // 获取写指针当前的偏移量
     size_t GetWritePos() { return _write_pos; }
-
-    // // 直接拷贝到后置缓冲区
-    // void DirectCopy(const void *data, size_t len)
-    // {
-    //     // data方法获取裸指针
-    //     memcpy(_buffer.data() + _write_pos, data, len);
-
-    //     // 更新写指针位置
-    //     MoveWritePos(len);
-    // }
 
     // 移动内存使其能够存储下所需数据
     void MoveMem()
@@ -105,29 +86,6 @@ private:
         return;
     }
 
-    // 向缓冲区里面写入数据
-    // void WriteData(const void *data, size_t len)
-    // {
-    //     // 拷贝到右边空闲空间就行
-    //     if (len <= AfterRemainSize()) { DirectCopy(data, len); }
-
-    //     // 将数据拷贝到最前面，再将data数据写到后面
-    //     else if (len <= RemainSize()) { MoveCopy(data, len); }
-
-    //     // 空闲空间都不够，采用扩容策略
-    //     else{
-    //         // _buffer.resize(size);
-    //         size_t newsize = BufferSize();
-    //         // 避免输入的数据量太大
-    //         while(newsize < ReadableSize() + len){
-    //             newsize *= 2;
-    //         }
-    //         ExpandMem(newsize);
-    //         // TODO，采用先移动，后拷贝的方式
-    //         MoveCopy(data, len);
-    //     }
-    // }
-
 private:
     std::vector<char> _buffer; // 缓冲区
     size_t _read_pos; // 读指针的偏移量
@@ -140,15 +98,14 @@ public:
     ,_write_pos(0)
     {}
 
-    // // 从缓冲区里面读固定长度数据
-    // std::string ReadData(size_t len);
+    // 获取缓冲区大小
+    size_t BufferSize();
 
-    // // 写入C风格的字符串
-    // void WriteCstrData(const char *data);
+    // 可读数据区大小
+    size_t ReadableSize();
 
-    // // 写入string类型的字符串
-    // void WriteStringData(const std::string& data);
-
+    // 计算缓冲区的剩余空间大小
+    size_t RemainSize();
 
     // 获取当前可读地址
     const char* Peek();

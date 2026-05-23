@@ -46,7 +46,7 @@ void EventLoop::Loop(){
             channel->HandleEvent();
         }
         // 执行任务
-        DoPendindFunctors();
+        DoPendingFunctors();
     }
 }
 
@@ -82,9 +82,9 @@ bool EventLoop::IsInLoopThread() const{
 }
 
 // 执行任务队列
-void EventLoop::DoPendindFunctors(){
+void EventLoop::DoPendingFunctors(){
     // 局部变量，线程私有
-    std::vector<Functor> tasks;
+    FunctorList tasks;
     {
         std::unique_lock<std::mutex> lock(_mutex);
         // _pending_functors是多线程的公共资源，为了避免资源竞争问题
