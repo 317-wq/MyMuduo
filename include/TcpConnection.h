@@ -2,6 +2,8 @@
 
 #include "NoCopy.h"
 #include "Channel.h"
+#include "Buffer.h"
+#include "Socket.h"
 #include <memory>
 #include <functional>
 
@@ -27,10 +29,15 @@ private:
     // 错误事件绑定
     void HandleError();
 
+    // 事件正常关闭：内核中去除，hash里面删除
+    void ConnectDestroyed();
+    
 private:
     EventLoop* _loop;
+    std::unique_ptr<Socket> _socket; // 套接字对象管理
     std::unique_ptr<Channel> _channel; // 对象自己拥有
-
+    Buffer _in_buffer; // msg -> inbuffer -> socket取
+    Buffer _out_buffer; // socket输出到outbuffer，上层自己取出数据
     ConnectCallback _connect_cb; // 通知上层连接到来
     MessageCallback _message_cb; // 通知上层有数据
     CloseCallback _close_cb; // 通知上层连接关闭
@@ -42,7 +49,8 @@ public:
 
     // 建立连接
     void ConnectEstablished();
-
+    // 主动发送
+    void Send(const std::string &str);
     // 销毁连接
     void ConnectDestroyed();
 
