@@ -94,11 +94,26 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # add_executable(log_test test/log_test.cpp)
 # target_link_libraries(log_test pthread)
 
-add_executable(test_eventloop
-    test/test_eventloop.cpp
+# add_executable(test_eventloop
+#     test/test_eventloop.cpp
+#     src/Poller.cpp
+#     src/EventLoop.cpp
+#     src/Channel.cpp
+#     src/EpollPoller.cpp
+# )
+# target_link_libraries(test_eventloop pthread)
+
+add_executable(test_server
+    test/test_server.cpp
     src/Poller.cpp
     src/EventLoop.cpp
     src/Channel.cpp
     src/EpollPoller.cpp
+    src/EventLoop.cpp
+    src/TcpServer.cpp
+    src/TcpConnection.cpp
+    src/Socket.cpp
+    src/InetAddress.cpp
+    src/Acceptor.cpp
 )
-target_link_libraries(test_eventloop pthread)
+target_link_libraries(test_server pthread)

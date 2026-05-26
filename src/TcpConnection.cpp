@@ -14,7 +14,7 @@ void TcpConnection::HandleRead() {
     }
 
     buffer[n] = 0;
-    std::cout << "echo@ " << buffer << std::endl;
+    std::cout << "echo@ " << buffer;
     if(_message_cb){
         _message_cb(shared_from_this());
         return;
@@ -24,8 +24,12 @@ void TcpConnection::HandleRead() {
 // 写事件绑定
 void TcpConnection::HandleWrite() {}
 
-// 关闭事件绑定
-void TcpConnection::HandleClose() { ConnectDestroyed(); }
+// 关闭连接事件绑定
+void TcpConnection::HandleClose() { 
+    // ConnectDestroyed(); 
+    if(_close_cb)
+        _close_cb(shared_from_this());
+}
 
 // 错误事件绑定
 void TcpConnection::HandleError() {
@@ -36,9 +40,12 @@ void TcpConnection::HandleError() {
 // 最终释放 
 void TcpConnection::ConnectDestroyed(){
     _channel->DisableAll(); // 事件全部关闭
+
+    // ？？？需要吗
     if(_close_cb)
         _close_cb(shared_from_this());
     _channel->Remove(); // 内核中和hash中除去
+    _socket->Close(); // 关闭套接字
 }
 
 TcpConnection::TcpConnection(EventLoop* loop, int fd)
@@ -54,8 +61,11 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 }
 
 int TcpConnection::Fd() const{
-    if(_socket)
-        return _socket->Fd();
+    if(_socket){
+        int fd = _socket->Fd();
+        return fd;
+    }
+    return -1;
 }
 
 // 建立连接
@@ -73,14 +83,5 @@ void TcpConnection::Send(const std::string &str){
 void TcpConnection::SetConnectCallback(ConnectCallback cb) { _connect_cb = std::move(cb); }
 void TcpConnection::SetMessageCallback(MessageCallback cb) { _message_cb = std::move(cb); }
 void TcpConnection::SetCloseCallback(CloseCallback cb) { _close_cb = std::move(cb); }
-
-// 销毁连接
-void TcpConnection::ConnectDestroyed(){
-    _channel->DisableAll();
-    if(_close_cb)
-        _close_cb(shared_from_this());
-    // 从内核和hash里面去除
-    _channel->Remove();
-}
 
 TcpConnection::~TcpConnection() = default;
