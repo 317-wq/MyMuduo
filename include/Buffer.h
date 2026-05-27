@@ -86,6 +86,9 @@ private:
         return;
     }
 
+    // 取出定长数据
+    std::string GetFixedData(const char* pos, size_t size) const;
+
 private:
     std::vector<char> _buffer; // 缓冲区
     size_t _read_pos; // 读指针的偏移量
@@ -114,7 +117,7 @@ public:
     char* BeginWrite();
 
     // 消费指定长度的数据，在http请求的时候，可能就是单独取出一部分
-    void Retrieve(size_t len);
+    std::string Retrieve(size_t len);
 
     // 清空所有数据
     void RetrieveAll();

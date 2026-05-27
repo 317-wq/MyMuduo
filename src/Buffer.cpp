@@ -6,15 +6,25 @@ const char *Buffer::Peek() { return _buffer.data() + _read_pos; }
 // 获取当前写入地址
 char *Buffer::BeginWrite() { return _buffer.data() + _write_pos; }
 
+// 取出定长数据
+std::string Buffer::GetFixedData(const char *pos, size_t size) const{
+    return std::string(_buffer.data(), size);
+}
+
 // 消费指定长度的数据，在http请求的时候，可能就是单独取出一部分
-void Buffer::Retrieve(size_t len) {
+std::string Buffer::Retrieve(size_t len) {
     len = (len <= ReadableSize() ? len : ReadableSize());
+    // 数据
+    std::string str = GetFixedData(Peek(), len);
+
     // 移动读指针
     MoveReadPos(len);
 
     // 回到初始位置
     if(_read_pos == _write_pos)
         RetrieveAll();
+    
+    return str;
 }
 
 // 清空所有数据
@@ -22,7 +32,7 @@ void Buffer::RetrieveAll() { Clear(); }
 
 // 取出缓冲区内的所有数据
 std::string Buffer::RetrieveAllAsString(){
-    std::string res(Peek(), ReadableSize());
+    std::string res = GetFixedData(Peek(), ReadableSize());
     RetrieveAll();
     return res;
 }
