@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EventLoop.h"
+#include "EventLoopThreadPool.h"
 #include "Acceptor.h"
 #include "TcpConnection.h"
 #include <memory>
@@ -17,7 +18,8 @@ public:
     using MessageCallback = std::function<void(const TcpConnection::Ptr &, Buffer *)>;
 
 private:
-    EventLoop* _loop; // 事件循环
+    EventLoop* _base_loop; // 事件循环-主线程
+    std::unique_ptr<EventLoopThreadPool> _thread_pool; // 管理任务线程对象池
     std::unique_ptr<Acceptor> _acceptor; // 管理新连接接收
     // 一个服务器管理多个新accept的连接对象
     std::unordered_map<int, TcpConnection::Ptr> _connections;
@@ -38,7 +40,7 @@ private:
     void SetAddConnectionCallback();
     
 public:
-    TcpServer(EventLoop* loop, u16 port);
+    TcpServer(EventLoop* base_loop, u16 port, size_t thread_num);
 
     // 上层设置
     void SetMessageCallback(MessageCallback cb);

@@ -4,20 +4,30 @@
 int EventLoop::CreateEventFd() const{
     // 禁止进程复制，设置非阻塞同时
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if(fd < 0)
+        perror("create eventfd failed");
     return fd;
 }
 
 // EventLoop调用，收信号
 void EventLoop::HandleRead(){
     u64 arg;
-    read(_wakeup_fd, &arg, sizeof(arg));
+    while(read(_wakeup_fd, &arg, sizeof(arg)) > 0);
 }
 
 // 其他线程调用，发信号
 void EventLoop::WakeUp(){
     u64 arg = 1;
     // 内核自己管理 ++
-    write(_wakeup_fd, &arg, sizeof(arg));
+    ssize_t n = write(_wakeup_fd, &arg, sizeof(arg));
+    if(n < 0){
+        if(errno == EWOULDBLOCK || errno == EAGAIN)
+            return;
+        else
+            perror("wakeup failed");
+        // if(errno == EINTR)
+        //     return;
+    }
 }
 
 EventLoop::EventLoop()
@@ -114,6 +124,11 @@ void EventLoop::RunInLoop(Functor func){
 }
 
 EventLoop::~EventLoop(){
+    // 同时移除channel
+    if(_wakeup_channel){
+        _wakeup_channel->Remove(); // 从内核，hash表里面移除
+    }
+    
     if(_wakeup_fd >= 0){
         close(_wakeup_fd);
         _wakeup_fd = -1;

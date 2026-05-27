@@ -94,7 +94,6 @@ Buffer *TcpConnection::OutBuffer(){
 
 // 最终释放 
 void TcpConnection::ConnectDestroyed(){
-    _channel->DisableAll(); // 事件全部关闭
     _channel->Remove(); // 内核中和hash中除去
     _socket->Close(); // 关闭套接字
 }
@@ -127,18 +126,20 @@ int TcpConnection::Fd() const{
 // 建立连接完成
 void TcpConnection::ConnectEstablished(){
     _state = CONNECTED; // 连接建立完成状态
-    _channel->EnableRead();
+    _channel->EnableRead(); // 操作epoll，跨线程时候有危险
     if(_connect_cb)
         _connect_cb(shared_from_this());
 }
 
 void TcpConnection::Send(const std::string &str){
-    // send(Fd(), str.c_str(), str.size(), 0);
-    // 将处理好的数据输出到发送缓冲区
-    _out_buffer.Append(str);
-    // 启动写事件监听，如果客户端的接收缓冲区有空闲，那么我就可以将送法缓冲区里面的数据发送
-    if(!_channel->WriteAble())
-        _channel->EnableWrite();
+    if(this->Connected()){
+        // send(Fd(), str.c_str(), str.size(), 0);
+        // 将处理好的数据输出到发送缓冲区
+        _out_buffer.Append(str);
+        // 启动写事件监听，如果客户端的接收缓冲区有空闲，那么我就可以将送法缓冲区里面的数据发送
+        if (!_channel->WriteAble())
+            _channel->EnableWrite();
+    }
 }
 
 // 设置TcpConnection层的上层业务回调

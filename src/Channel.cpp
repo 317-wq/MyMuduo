@@ -43,7 +43,7 @@ void Channel::DisableWrite() {
 
 void Channel::DisableAll() { 
     _events = 0; 
-    Update(); // [FIX-7] 需要更新到内核
+    Update(); // 需要更新到内核
 }
 
 bool Channel::ReadAble() const { return _events & EPOLLIN; }
@@ -83,6 +83,7 @@ void Channel::Update(){
 }
 
 void Channel::Remove(){
+    DisableAll();
     if(_loop){
         _loop->RemoveChannel(this);
     }

@@ -6,7 +6,6 @@
 #include <thread>
 #include <mutex>
 #include <sys/eventfd.h>
-#include <memory>
 
 class EventLoop{
 public:

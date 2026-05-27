@@ -32,6 +32,10 @@ private:
     EventCallback _event_cb; // 任意事件回调
 
     EventLoop* _loop; // 后续将数据注册到内核里面，就是职责分开，实际上还是调用epoll_ctl
+
+private:
+    void DisableAll();
+    
 public:
     // explicit Channel(int fd);
 
@@ -55,7 +59,6 @@ public:
 
     void DisableRead();
     void DisableWrite();
-    void DisableAll();
 
     bool ReadAble() const;
     bool WriteAble() const;

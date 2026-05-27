@@ -116,5 +116,7 @@ add_executable(test_server
     src/InetAddress.cpp
     src/Acceptor.cpp
     src/Buffer.cpp
+    src/EventLoopThread.cpp
+    src/EventLoopThreadPool.cpp
 )
 target_link_libraries(test_server pthread)
