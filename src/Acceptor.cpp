@@ -7,7 +7,6 @@ void Acceptor::HandleRead(){
     int connfd = Accept(&client);
     if(connfd < 0)
         return;
-    std::cout << "ip: is coming" << client.Ip() << std::endl;
     // 通知上层创建连接
     if(_new_connection_cb)
         _new_connection_cb(connfd);

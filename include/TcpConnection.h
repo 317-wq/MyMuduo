@@ -16,8 +16,17 @@ public:
     // 无法自己一个人决定连接是否释放，要保证回调函数存在等，所以使用shared_ptr
     using Ptr = std::shared_ptr<TcpConnection>;
     using ConnectCallback = std::function<void(const Ptr&)>; // 连接事件回调
-    using MessageCallback = std::function<void(const Ptr&)>; // 消息事件回调
+    // 消息事件回调 -> 回调自身函数，对下层传输过来的数据进行处理
+    using MessageCallback = std::function<void(const Ptr&, Buffer*)>;
     using CloseCallback = std::function<void(const Ptr&)>; // 通道关闭事件回调
+
+    // 连接的四种状态
+    enum State{
+        CONNECTING,
+        CONNECTED,
+        DISCONNECTING,
+        DISCONNECTED
+    };
 
 private:
     // 读事件绑定
@@ -32,6 +41,12 @@ private:
     // 错误事件绑定
     void HandleError();
 
+    // 获取inbuffer的起始位置
+    Buffer* InBuffer();
+
+    // 获取outbuffer的起始位置
+    Buffer* OutBuffer();
+
 private:
     EventLoop* _loop;
     std::unique_ptr<Socket> _socket; // 套接字对象管理
@@ -41,9 +56,17 @@ private:
     ConnectCallback _connect_cb; // 通知上层连接到来
     MessageCallback _message_cb; // 通知上层有数据
     CloseCallback _close_cb; // 通知上层连接关闭
+    State _state; // 连接的状态
 
 public:
-    TcpConnection(EventLoop* loop, int fd);
+    // 由accept的fd来构建连接，需要对这个fd进行事件管理，套接字管理
+    TcpConnection(EventLoop* loop, int fd, bool non_block = true);
+    
+    // 连接是否建立完成
+    bool Connected() const;
+
+    // 连接是否已经关闭
+    bool DisConnected() const;
 
     int Fd() const;
 
