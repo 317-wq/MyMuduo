@@ -1,5 +1,6 @@
 #include "../include/EventLoop.h"
 #include "../include/EpollPoller.h"
+#include <iostream>
 
 int EventLoop::CreateEventFd() const{
     // 禁止进程复制，设置非阻塞同时
@@ -42,6 +43,7 @@ EventLoop::EventLoop()
     _wakeup_channel->SetReadCallback(std::bind(&EventLoop::HandleRead, this));
     // 读事件注册到内核
     _wakeup_channel->EnableRead();
+    _timer_queue = std::make_unique<TimerQueue>(this);
 }
 
 // 事件循环
@@ -121,6 +123,20 @@ void EventLoop::QueueInLoop(Functor func){
 void EventLoop::RunInLoop(Functor func){
     if(IsInLoopThread()) func();
     else QueueInLoop(std::move(func));
+}
+
+// 一次性任务[sec秒之后执行]
+void EventLoop::RunAfter(int sec, Timer::Callback cb){
+    if(_timer_queue){
+        _timer_queue->RunAfter(sec, std::move(cb));
+    }
+}
+
+// 周期性任务,repeat为true
+void EventLoop::RunEvery(int sec, Timer::Callback cb){
+    if(_timer_queue){
+        _timer_queue->RunEvery(sec, std::move(cb));
+    }
 }
 
 EventLoop::~EventLoop(){

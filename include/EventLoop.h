@@ -6,6 +6,9 @@
 #include <thread>
 #include <mutex>
 #include <sys/eventfd.h>
+#include "TimerQueue.h"
+
+class TimerQueue;
 
 class EventLoop{
 public:
@@ -25,6 +28,7 @@ private:
     std::unique_ptr<Channel> _wakeup_channel; // 只有一个拥有者
     FunctorList _pending_functors; // 任务队列
     std::mutex _mutex;
+    std::shared_ptr<TimerQueue> _timer_queue; // 定时器队列
 
 private:
     int CreateEventFd() const;
@@ -64,5 +68,11 @@ public:
     // 直接运行
     void RunInLoop(Functor func);
 
+    // 一次性任务[sec秒之后执行]
+    void RunAfter(int sec, Timer::Callback cb);
+
+    // 周期性任务,repeat为true
+    void RunEvery(int sec, Timer::Callback cb);
+    
     ~EventLoop();
 };
