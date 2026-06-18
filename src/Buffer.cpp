@@ -8,7 +8,7 @@ char *Buffer::BeginWrite() { return _buffer.data() + _write_pos; }
 
 // 取出定长数据
 std::string Buffer::GetFixedData(const char *pos, size_t size) const{
-    return std::string(_buffer.data(), size);
+    return std::string(pos, size);
 }
 
 // 消费指定长度的数据，在http请求的时候，可能就是单独取出一部分
