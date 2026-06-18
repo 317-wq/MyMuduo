@@ -103,22 +103,27 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # )
 # target_link_libraries(test_eventloop pthread)
 
+# 网络库源文件
+set(NET_SRCS
+    src/net/Poller.cpp
+    src/net/EventLoop.cpp
+    src/net/Channel.cpp
+    src/net/EpollPoller.cpp
+    src/net/TcpServer.cpp
+    src/net/TcpConnection.cpp
+    src/net/Socket.cpp
+    src/net/InetAddress.cpp
+    src/net/Acceptor.cpp
+    src/net/Buffer.cpp
+    src/net/EventLoopThread.cpp
+    src/net/EventLoopThreadPool.cpp
+    src/net/Timer.cpp
+    src/net/TimerQueue.cpp
+    src/net/TimeWheel.cpp
+)
+
 add_executable(test_server
     test/test_server.cpp
-    src/Poller.cpp
-    src/EventLoop.cpp
-    src/Channel.cpp
-    src/EpollPoller.cpp
-    src/TcpServer.cpp
-    src/TcpConnection.cpp
-    src/Socket.cpp
-    src/InetAddress.cpp
-    src/Acceptor.cpp
-    src/Buffer.cpp
-    src/EventLoopThread.cpp
-    src/EventLoopThreadPool.cpp
-    src/Timer.cpp
-    src/TimerQueue.cpp
-    src/TimeWheel.cpp
+    ${NET_SRCS}
 )
 target_link_libraries(test_server pthread)
