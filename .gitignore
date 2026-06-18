@@ -80,3 +80,5 @@ coverage/
 # =========================
 .clangd/
 .cache/
+
+CLAUDE.md
