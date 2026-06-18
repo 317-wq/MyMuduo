@@ -13,7 +13,7 @@
 
 class EventLoopThread{
 private:
-    EventLoop* _loop; // 当前线程绑定对应loop
+    std::unique_ptr<EventLoop> _loop; // 当前线程绑定对应loop，自己管理
     std::unique_ptr<std::thread> _thread; // 工作线程
     std::mutex _mutex; // 锁资源，保证同步
     std::condition_variable _cond;
@@ -22,7 +22,7 @@ private:
 private:
     // 工作线程入口：创建工作线程，绑定loop，唤醒主线程
     void ThreadFunc();
-
+    
 public:
     EventLoopThread();
 

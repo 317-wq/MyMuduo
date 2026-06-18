@@ -6,7 +6,7 @@ void TcpConnection::HandleRead() {
     while (true){
         int n = recv(Fd(), buffer, sizeof(buffer) - 1, 0);
         if(n > 0){
-            // 信息输入到接收缓冲区里面
+            // 信息输   入到接收缓冲区里面
             _in_buffer.Append(buffer, n);
         }
         else if(n == 0){
@@ -22,11 +22,16 @@ void TcpConnection::HandleRead() {
     }
 
     // std::cout << "echo@ " << buffer;
-    // 上层处理inbuffer里的数据
+    // TcpServer上层处理inbuffer里的数据
     if(_message_cb){
         _message_cb(shared_from_this(), &_in_buffer);
         return;
     }
+}
+
+// 获取当前的loop
+EventLoop *TcpConnection::GetLoop(){
+    return _loop;
 }
 
 // 连接是否建立完成

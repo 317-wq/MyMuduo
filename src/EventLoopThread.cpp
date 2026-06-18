@@ -2,11 +2,11 @@
 
 // 工作线程入口：创建工作线程，绑定loop，唤醒主线程
 void EventLoopThread::ThreadFunc(){
-    EventLoop loop;
+    auto loop = std::make_unique<EventLoop>();
     // 绑定事件循环
     {
         std::unique_lock<std::mutex> lock(_mutex);
-        _loop = &loop;
+        _loop = std::move(loop);
         // 通知主线程
         _cond.notify_one();
     }
@@ -16,7 +16,7 @@ void EventLoopThread::ThreadFunc(){
     // 任务执行完成
     {
         std::unique_lock<std::mutex> lock(_mutex);
-        _loop = nullptr;
+        _loop.reset(); // unique_ptr重置
     }
 }
 
@@ -28,7 +28,7 @@ EventLoopThread::EventLoopThread()
 // 返回线程当前绑定的loop，等待loop创建完成
 EventLoop *EventLoopThread::StartLoop(){
     if(_started)
-        return _loop;
+        return _loop.get();
     _started = true;
 
     // 工作线程绑定对应创建work线程的回调函数
@@ -43,10 +43,14 @@ EventLoop *EventLoopThread::StartLoop(){
     }
 
     // 通知后，拿到对应的loop
-    return _loop;
+    return _loop.get();
 }
 
 EventLoopThread::~EventLoopThread(){
+    // 退出事件循环
+    if(_loop){
+        _loop->Quit();
+    }
     if(_thread && _thread->joinable()){
         _thread->join();
     }

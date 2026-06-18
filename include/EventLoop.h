@@ -46,6 +46,8 @@ public:
 
     void Loop();
 
+    void Quit();
+    
     // 添加 Channel 并设置其 loop 指针
     // 用 UpdateChannel 替换 AddChannel
     // void AddChannel(Channel* channel);

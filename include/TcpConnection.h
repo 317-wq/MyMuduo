@@ -61,6 +61,9 @@ private:
 public:
     // 由accept的fd来构建连接，需要对这个fd进行事件管理，套接字管理
     TcpConnection(EventLoop* loop, int fd, bool non_block = true);
+
+    // 获取当前的loop
+    EventLoop* GetLoop();
     
     // 连接是否建立完成
     bool Connected() const;

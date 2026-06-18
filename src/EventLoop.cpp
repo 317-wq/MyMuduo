@@ -13,7 +13,13 @@ int EventLoop::CreateEventFd() const{
 // EventLoop调用，收信号
 void EventLoop::HandleRead(){
     u64 arg;
-    while(read(_wakeup_fd, &arg, sizeof(arg)) > 0);
+    while(read(_wakeup_fd, &arg, sizeof(arg)) > 0){
+        // 持续读取直到 eventfd 为空
+    }
+    // 出错时跳出（EAGAIN 表示已读完，其他错误记录日志）
+    if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR){
+        perror("EventLoop::HandleRead read error");
+    }
 }
 
 // 其他线程调用，发信号
@@ -44,6 +50,12 @@ EventLoop::EventLoop()
     // 读事件注册到内核
     _wakeup_channel->EnableRead();
     _timer_queue = std::make_unique<TimerQueue>(this);
+}
+
+void EventLoop::Quit(){
+    _running = false;
+    // 唤醒可能处于epoll_wait的线程
+    WakeUp();
 }
 
 // 事件循环
