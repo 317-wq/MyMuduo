@@ -4,6 +4,7 @@
 #include "EventLoopThreadPool.h"
 #include "Acceptor.h"
 #include "TcpConnection.h"
+#include "TimeWheel.h"
 #include <memory>
 #include <functional>
 #include <unordered_map>
@@ -25,6 +26,7 @@ private:
     std::unordered_map<int, TcpConnection::Ptr> _connections;
     ConnectCallback _connect_cb; // 通知上层连接到来
     MessageCallback _message_cb; // 通知上层有数据
+    std::unique_ptr<TimeWheel> _time_wheel;
 
 private:
     // 连接是否存在
@@ -38,9 +40,18 @@ private:
 
     // 将增加新连接，建立连接的函数进行绑定
     void SetAddConnectionCallback();
-    
+
+    // 用于绑定时间轮的回调函数
+    void HandleTimeout(int fd);
+
+    // 用于TcpConnection的message的事件回调绑定，需要让wheel也知道连接的进行，要不然就直接销毁了
+    void OnMessage(const TcpConnection::Ptr &conn, Buffer *buf);
+
+    // 在主线程里面删除
+    void RemoveConnectionInLoop(const TcpConnection::Ptr &conn);
+
 public:
-    TcpServer(EventLoop* base_loop, u16 port, size_t thread_num);
+    TcpServer(EventLoop* base_loop, u16 port, size_t thread_num, size_t timeout);
 
     // 上层设置
     void SetMessageCallback(MessageCallback cb);
