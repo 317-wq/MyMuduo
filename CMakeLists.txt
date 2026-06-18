@@ -109,7 +109,6 @@ add_executable(test_server
     src/EventLoop.cpp
     src/Channel.cpp
     src/EpollPoller.cpp
-    src/EventLoop.cpp
     src/TcpServer.cpp
     src/TcpConnection.cpp
     src/Socket.cpp
@@ -118,5 +117,8 @@ add_executable(test_server
     src/Buffer.cpp
     src/EventLoopThread.cpp
     src/EventLoopThreadPool.cpp
+    src/Timer.cpp
+    src/TimerQueue.cpp
+    src/TimeWheel.cpp
 )
 target_link_libraries(test_server pthread)
