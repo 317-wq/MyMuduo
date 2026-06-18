@@ -41,6 +41,9 @@ private:
     // 错误事件绑定
     void HandleError();
 
+    // 在 io_loop 线程真正执行发送（由 Send 通过 RunInLoop 分发）
+    void SendInLoop(const std::string &str);
+
     // 获取inbuffer的起始位置
     Buffer* InBuffer();
 

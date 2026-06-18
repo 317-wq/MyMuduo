@@ -1,4 +1,5 @@
 #include "../include/TcpConnection.h"
+#include "../include/EventLoop.h"
 
 // 读事件绑定
 void TcpConnection::HandleRead() {
@@ -65,8 +66,7 @@ void TcpConnection::HandleWrite() {
     }
 
     // 取出固定长度的字节数
-    std::string str = _out_buffer.Retrieve(n);
-    std::cout << str; // 回显看一下
+    _out_buffer.Retrieve(n);
     // 此时发送缓冲区里面没有数据要发送，关闭写事件监听
     if(_out_buffer.ReadableSize() == 0)
         _channel->DisableWrite();
@@ -136,15 +136,20 @@ void TcpConnection::ConnectEstablished(){
         _connect_cb(shared_from_this());
 }
 
+// 上层调用，可能跨线程 → 分发到 io_loop 执行
 void TcpConnection::Send(const std::string &str){
-    if(this->Connected()){
-        // send(Fd(), str.c_str(), str.size(), 0);
-        // 将处理好的数据输出到发送缓冲区
-        _out_buffer.Append(str);
-        // 启动写事件监听，如果客户端的接收缓冲区有空闲，那么我就可以将送法缓冲区里面的数据发送
-        if (!_channel->WriteAble())
-            _channel->EnableWrite();
-    }
+    _loop->RunInLoop([conn = shared_from_this(), str]{
+        conn->SendInLoop(str);
+    });
+}
+
+// 在 io_loop 线程真正执行发送
+void TcpConnection::SendInLoop(const std::string &str){
+    if(!Connected()) return;
+    _out_buffer.Append(str);
+    // 启动写事件监听，如果客户端的接收缓冲区有空闲就可以发送
+    if (!_channel->WriteAble())
+        _channel->EnableWrite();
 }
 
 // 设置TcpConnection层的上层业务回调
