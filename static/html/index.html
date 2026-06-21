@@ -3,66 +3,513 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyMuduo Chat</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <title>MyChat - 聊天室</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            height: 100vh; overflow: hidden;
+            position: relative;
+            background: url('/static/backgrounds/gyx.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 0;
+        }
+
+        /* ── 整体布局 ── */
+        .app {
+            position: relative; z-index: 1;
+            display: flex; height: 100vh; max-width: 1100px; margin: 0 auto;
+        }
+
+        /* ── 侧边栏 ── */
+        .sidebar {
+            width: 260px; min-width: 260px;
+            background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+            display: flex; flex-direction: column;
+            border-right: 1px solid rgba(0,0,0,0.08);
+        }
+        .sidebar-header {
+            padding: 20px 18px 14px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+        .sidebar-header .logo { font-size: 32px; margin-bottom: 2px; }
+        .sidebar-header h2 { font-size: 17px; color: #333; }
+        .user-info {
+            padding: 14px 18px; font-size: 13px; color: #555;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+        .user-info .avatar { display: inline-block; width: 32px; height: 32px; line-height: 32px;
+            text-align: center; background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; border-radius: 50%; margin-right: 8px; font-size: 14px; font-weight: 600;
+            vertical-align: middle; }
+        .user-info .username { font-weight: 600; color: #333; }
+        .online-title {
+            padding: 12px 18px 6px; font-size: 11px; color: #999;
+            text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+        }
+        .online-list {
+            flex: 1; overflow-y: auto; padding: 4px 10px;
+        }
+        .online-list .user-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #444;
+            transition: background 0.2s;
+        }
+        .online-list .user-item:hover { background: rgba(0,0,0,0.04); }
+        .online-list .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #48bb78; flex-shrink: 0;
+        }
+        .sidebar-footer {
+            padding: 12px 18px; border-top: 1px solid rgba(0,0,0,0.06);
+        }
+        .logout-btn {
+            width: 100%; padding: 9px;
+            background: transparent; color: #e53e3e; border: 1px solid #fed7d7;
+            border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .logout-btn:hover { background: #fff5f5; }
+
+        /* ── 主聊天区域 ── */
+        .main {
+            flex: 1; display: flex; flex-direction: column;
+            background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
+        }
+        .chat-header {
+            padding: 16px 24px; font-size: 15px; font-weight: 600; color: #333;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+        .chat-header .room-icon { margin-right: 6px; }
+        .chat-header .online-count { font-weight: 400; font-size: 12px; color: #999; margin-left: 8px; }
+        .messages {
+            flex: 1; overflow-y: auto; padding: 20px 24px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        /* ── 消息气泡 ── */
+        .msg-row { display: flex; gap: 8px; max-width: 75%; animation: fadeIn 0.25s; }
+        .msg-row.mine { align-self: flex-end; flex-direction: row-reverse; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .msg-avatar {
+            width: 34px; height: 34px; line-height: 34px; text-align: center;
+            border-radius: 50%; font-size: 13px; font-weight: 600; color: white;
+            flex-shrink: 0;
+        }
+        .msg-avatar.other { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .msg-avatar.mine  { background: linear-gradient(135deg, #11998e, #38ef7d); }
+        .msg-body { display: flex; flex-direction: column; gap: 2px; }
+        .msg-row.mine .msg-body { align-items: flex-end; }
+        .msg-sender { font-size: 11px; color: #999; padding: 0 4px; }
+        .msg-row.mine .msg-sender { display: none; }
+        .msg-bubble {
+            padding: 9px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55;
+            word-break: break-word; position: relative;
+        }
+        .msg-row:not(.mine) .msg-bubble {
+            background: #fff; color: #333;
+            border-top-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .msg-row.mine .msg-bubble {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            color: #fff; border-top-right-radius: 4px;
+        }
+        .msg-time { font-size: 10px; color: #aaa; padding: 0 4px; margin-top: 1px; }
+        .msg-row.mine .msg-time { text-align: right; }
+
+        /* 系统消息 */
+        .sys-msg {
+            text-align: center; font-size: 12px; color: #999;
+            padding: 4px 0; animation: fadeIn 0.3s;
+        }
+        .sys-msg span {
+            background: rgba(0,0,0,0.06); padding: 3px 12px; border-radius: 20px;
+        }
+
+        /* ── 输入区 ── */
+        .input-area {
+            padding: 14px 24px; border-top: 1px solid rgba(0,0,0,0.06);
+            display: flex; gap: 10px; align-items: flex-end;
+        }
+        .input-area textarea {
+            flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0;
+            border-radius: 10px; font-size: 14px; font-family: inherit;
+            resize: none; outline: none; max-height: 120px; line-height: 1.5;
+            transition: border-color 0.3s;
+        }
+        .input-area textarea:focus { border-color: #667eea; }
+        .send-btn {
+            padding: 10px 22px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            white-space: nowrap;
+        }
+        .send-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(102,126,234,0.35); }
+        .send-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            padding: 10px 24px; border-radius: 8px; font-size: 13px; z-index: 99;
+            animation: fadeIn 0.3s; pointer-events: none;
+        }
+        .toast.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
+        .toast.info  { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+
+        /* ── 响应式 ── */
+        @media (max-width: 700px) {
+            .sidebar { display: none; }
+        }
+    </style>
 </head>
 <body>
-    <div id="app">
-        <!-- 顶部导航 -->
-        <header>
-            <h1>💬 MyMuduo Chat</h1>
-            <div id="user-info" style="display:none;">
-                <img id="user-avatar" src="/img/default.svg" width="32" height="32" alt="avatar">
-                <span id="user-name"></span>
-                <button id="btn-logout">登出</button>
-            </div>
-        </header>
+<div class="app">
+    <!-- ──── 侧边栏 ──── -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">💬</div>
+            <h2>MyChat 聊天室</h2>
+        </div>
+        <div class="user-info">
+            <span class="avatar" id="myAvatar"></span>
+            <span class="username" id="myName"></span>
+        </div>
+        <div class="online-title">在线成员 <span id="onlineCount">0</span></div>
+        <div class="online-list" id="onlineList"></div>
+        <div class="sidebar-footer">
+            <button class="logout-btn" onclick="doLogout()">退出登录</button>
+        </div>
+    </aside>
 
-        <main>
-            <!-- 登录 / 注册面板 -->
-            <div id="auth-panel">
-                <div class="tabs">
-                    <button class="tab active" data-tab="login">登录</button>
-                    <button class="tab" data-tab="register">注册</button>
-                </div>
+    <!-- ──── 主区域 ──── -->
+    <main class="main">
+        <div class="chat-header">
+            <span class="room-icon">🏠</span>大厅
+            <span class="online-count" id="headerOnlineCount">0 人在线</span>
+        </div>
+        <div class="messages" id="messages">
+            <div class="sys-msg"><span>欢迎来到 MyChat 聊天室 🎉</span></div>
+        </div>
+        <div class="input-area">
+            <textarea id="msgInput" rows="1" placeholder="输入消息，按 Enter 发送，Shift+Enter 换行…" maxlength="4096"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">发 送</button>
+        </div>
+    </main>
+</div>
 
-                <!-- 登录表单 -->
-                <form id="login-form" class="auth-form">
-                    <input type="email" id="login-email" placeholder="邮箱" required>
-                    <input type="password" id="login-password" placeholder="密码" required>
-                    <button type="submit">登录</button>
-                </form>
+<!-- Toast -->
+<div id="toast" class="toast" style="display:none;"></div>
 
-                <!-- 注册表单 -->
-                <form id="register-form" class="auth-form" style="display:none;">
-                    <input type="email" id="reg-email" placeholder="邮箱" required>
-                    <button type="button" id="btn-send-code">发送验证码</button>
-                    <input type="text" id="reg-code" placeholder="验证码" required>
-                    <input type="text" id="reg-username" placeholder="用户名" required>
-                    <input type="password" id="reg-password" placeholder="密码" required>
-                    <button type="submit">注册</button>
-                </form>
+<script>
+// ═══════════════════════════════════════
+// 状态
+// ═══════════════════════════════════════
+let username = '';
+let userId   = '';
+let token    = '';
 
-                <div id="auth-message"></div>
-            </div>
+// ═══════════════════════════════════════
+// 初始化
+// ═══════════════════════════════════════
+(function init() {
+    const params = new URLSearchParams(window.location.search);
+    username = params.get('user') || getCookie('username_display') || 'Guest';
+    token    = params.get('token') || getCookie('token') || '';
 
-            <!-- 聊天面板 -->
-            <div id="chat-panel" style="display:none;">
-                <div id="online-users">
-                    <h3>在线用户</h3>
-                    <ul id="user-list"></ul>
-                </div>
-                <div id="chat-area">
-                    <div id="messages"></div>
-                    <form id="chat-form">
-                        <input type="text" id="chat-input" placeholder="输入消息..." autocomplete="off">
-                        <button type="submit">发送</button>
-                    </form>
-                </div>
-            </div>
-        </main>
-    </div>
+    // 头像取首字符
+    document.getElementById('myAvatar').textContent = username.charAt(0).toUpperCase();
+    document.getElementById('myName').textContent = username;
 
-    <script src="/js/app.js"></script>
+    // 无 token 则尝试从 cookie 取
+    if (!token) {
+        token = getCookie('token');
+    }
+
+    // 连接 WebSocket（如果有 token 则带上）
+    connect();
+})();
+
+// ═══════════════════════════════════════
+// WebSocket
+// ═══════════════════════════════════════
+let ws = null;
+let reconnectTimer = null;
+
+function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = proto + '://' + location.host + '/ws';
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = function() {
+        console.log('WebSocket connected');
+        clearReconnect();
+        // 发送鉴权（如有 token）
+        if (token) {
+            send({ type: 'auth', token: token });
+        } else if (username) {
+            send({ type: 'auth', username: username });
+        }
+    };
+
+    ws.onmessage = function(e) {
+        try {
+            const msg = JSON.parse(e.data);
+            handleMessage(msg);
+        } catch (err) {
+            console.error('Parse error:', err);
+        }
+    };
+
+    ws.onclose = function() {
+        console.log('WebSocket disconnected');
+        scheduleReconnect();
+    };
+
+    ws.onerror = function(err) {
+        console.error('WebSocket error:', err);
+    };
+}
+
+function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+    }
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    showToast('连接断开，正在重连...', 'info');
+    reconnectTimer = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            clearReconnect();
+            return;
+        }
+        connect();
+    }, 3000);
+}
+
+function clearReconnect() {
+    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+    hideToast();
+}
+
+// ═══════════════════════════════════════
+// 消息处理
+// ═══════════════════════════════════════
+function handleMessage(msg) {
+    switch (msg.type) {
+    case 'auth_ok':
+        userId = msg.user_id || '';
+        break;
+    case 'chat':
+        appendChat(msg.sender, msg.content, msg.timestamp, msg.sender === username);
+        break;
+    case 'system':
+        appendSystem(msg.content);
+        break;
+    case 'online_list':
+        renderOnlineList(msg.users || []);
+        break;
+    case 'user_join':
+        appendSystem((msg.username || 'Someone') + ' 加入了聊天室');
+        if (msg.username) addOnlineUser(msg.username);
+        break;
+    case 'user_leave':
+        appendSystem((msg.username || 'Someone') + ' 离开了聊天室');
+        if (msg.username) removeOnlineUser(msg.username);
+        break;
+    case 'private':
+        appendChat(msg.sender, '(私聊) ' + msg.content, msg.timestamp, false, true);
+        break;
+    case 'error':
+        showToast(msg.message || '发生错误', 'error');
+        break;
+    default:
+        console.log('Unknown message type:', msg.type, msg);
+    }
+}
+
+// ═══════════════════════════════════════
+// 消息渲染
+// ═══════════════════════════════════════
+function appendChat(sender, content, ts, isMine, isPrivate) {
+    const container = document.getElementById('messages');
+    const row = document.createElement('div');
+    row.className = 'msg-row' + (isMine ? ' mine' : '');
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar ' + (isMine ? 'mine' : 'other');
+    avatar.textContent = (sender || '?').charAt(0).toUpperCase();
+
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+
+    const senderEl = document.createElement('div');
+    senderEl.className = 'msg-sender';
+    senderEl.textContent = sender || 'Unknown';
+    if (isPrivate) senderEl.textContent += ' 🔒';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = content || '';
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'msg-time';
+    timeEl.textContent = ts ? formatTime(ts) : formatTime(Date.now());
+
+    body.appendChild(senderEl);
+    body.appendChild(bubble);
+    body.appendChild(timeEl);
+    row.appendChild(avatar);
+    row.appendChild(body);
+    container.appendChild(row);
+    scrollToBottom();
+}
+
+function appendSystem(text) {
+    const container = document.getElementById('messages');
+    const el = document.createElement('div');
+    el.className = 'sys-msg';
+    el.innerHTML = '<span>' + escapeHtml(text) + '</span>';
+    container.appendChild(el);
+    scrollToBottom();
+}
+
+function scrollToBottom() {
+    const el = document.getElementById('messages');
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+}
+
+// ═══════════════════════════════════════
+// 在线用户列表
+// ═══════════════════════════════════════
+const onlineUsers = new Set();
+
+function renderOnlineList(users) {
+    onlineUsers.clear();
+    users.forEach(u => onlineUsers.add(u));
+    refreshOnlineUI();
+}
+
+function addOnlineUser(u) {
+    onlineUsers.add(u);
+    refreshOnlineUI();
+}
+
+function removeOnlineUser(u) {
+    onlineUsers.delete(u);
+    refreshOnlineUI();
+}
+
+function refreshOnlineUI() {
+    const list = document.getElementById('onlineList');
+    const arr = Array.from(onlineUsers).sort();
+    list.innerHTML = arr.map(u =>
+        '<div class="user-item"><span class="dot"></span>' + escapeHtml(u) + '</div>'
+    ).join('');
+    const count = arr.length;
+    document.getElementById('onlineCount').textContent = count;
+    document.getElementById('headerOnlineCount').textContent = count + ' 人在线';
+}
+
+// ═══════════════════════════════════════
+// 发送消息
+// ═══════════════════════════════════════
+function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    btn.textContent = '发送中';
+
+    send({ type: 'chat', content: text });
+    // 乐观渲染自己的消息
+    appendChat(username, text, Date.now(), true);
+
+    input.value = '';
+    input.style.height = 'auto';
+    btn.disabled = false;
+    btn.textContent = '发 送';
+    input.focus();
+}
+
+// ═══════════════════════════════════════
+// 退出登录
+// ═══════════════════════════════════════
+async function doLogout() {
+    try {
+        await fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+    } catch (e) { /* ignore */ }
+    // 清除 cookie
+    document.cookie = 'username_display=;path=/;max-age=0';
+    document.cookie = 'token=;path=/;max-age=0';
+    if (ws) ws.close();
+    window.location.href = '/login';
+}
+
+// ═══════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════
+function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+}
+
+function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function formatTime(ts) {
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function showToast(text, cls) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.className = 'toast ' + cls;
+    el.style.display = 'block';
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function hideToast() {
+    const el = document.getElementById('toast');
+    el.style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// 键盘事件
+// ═══════════════════════════════════════
+document.getElementById('msgInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// 自动调整 textarea 高度
+document.getElementById('msgInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+</script>
 </body>
 </html>

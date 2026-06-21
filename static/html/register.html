@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChat - 注册</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            background: url('/static/backgrounds/gyx.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 0;
+        }
+        .container {
+            position: relative; z-index: 1;
+            background: rgba(255,255,255,0.95); border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            padding: 40px 36px; width: 440px; max-width: 90vw;
+            backdrop-filter: blur(4px);
+        }
+        .logo { text-align: center; font-size: 48px; margin-bottom: 4px; }
+        h1 { text-align: center; color: #333; margin-bottom: 4px; font-size: 22px; }
+        .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 24px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; color: #555; font-size: 13px; margin-bottom: 4px; font-weight: 500; }
+        input[type="text"], input[type="email"], input[type="password"] {
+            width: 100%; padding: 10px 14px;
+            border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 15px; transition: border-color 0.3s; outline: none;
+        }
+        input:focus { border-color: #11998e; box-shadow: 0 0 0 3px rgba(17,153,142,0.12); }
+
+        .pwd-wrap { position: relative; }
+        .pwd-wrap input { padding-right: 44px; }
+        .pwd-toggle {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 18px;
+            padding: 4px 6px; color: #999; line-height: 1; user-select: none;
+        }
+        .pwd-toggle:hover { color: #333; }
+
+        .code-row { display: flex; gap: 10px; }
+        .code-row input { flex: 1; }
+        .code-row button {
+            white-space: nowrap; padding: 10px 14px;
+            background: #11998e; color: white; border: none;
+            border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .code-row button:hover { opacity: 0.85; }
+        .code-row button:disabled { background: #bbb; cursor: not-allowed; }
+
+        .submit-btn {
+            width: 100%; padding: 13px; margin-top: 8px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white; border: none; border-radius: 8px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(17,153,142,0.35); }
+        .submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .msg { text-align: center; padding: 10px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; display: none; }
+        .msg.show { display: block; }
+        .msg.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
+        .msg.success { background: #f0fff4; color: #38a169; border: 1px solid #c6f6d5; }
+        .msg.info { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+
+        .password-strength { height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 6px; }
+        .password-strength-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+        .footer { text-align: center; color: #999; font-size: 13px; margin-top: 20px; }
+        .footer a { color: #11998e; text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="logo">✨</div>
+    <h1>创建账号</h1>
+    <p class="subtitle">注册 MyChat 账号，加入聊天</p>
+    <div id="msgBox" class="msg"></div>
+
+    <!-- 用户名 -->
+    <div class="form-group">
+        <label for="username">用户名</label>
+        <input type="text" id="username" placeholder="4-20 位字母、数字或下划线"
+               required autofocus pattern="[a-zA-Z0-9_]{4,20}" maxlength="20">
+    </div>
+
+    <!-- 邮箱 -->
+    <div class="form-group">
+        <label for="email">邮箱</label>
+        <input type="email" id="email" placeholder="请输入邮箱地址" required>
+    </div>
+
+    <!-- 密码 -->
+    <div class="form-group">
+        <label for="password">密码</label>
+        <div class="pwd-wrap">
+            <input type="password" id="password" placeholder="至少 6 位字符" required minlength="6"
+                   oninput="updateStrength()">
+            <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)" title="显示/隐藏密码">👁</button>
+        </div>
+        <div class="password-strength"><div class="password-strength-bar" id="strengthBar" style="width:0;"></div></div>
+    </div>
+
+    <!-- 确认密码 -->
+    <div class="form-group">
+        <label for="confirm_password">确认密码</label>
+        <div class="pwd-wrap">
+            <input type="password" id="confirm_password" placeholder="请再次输入密码" required minlength="6">
+            <button type="button" class="pwd-toggle" onclick="togglePwd('confirm_password', this)" title="显示/隐藏密码">👁</button>
+        </div>
+    </div>
+
+    <!-- 验证码 -->
+    <div class="form-group">
+        <label>邮箱验证码</label>
+        <div class="code-row">
+            <input type="text" id="code" placeholder="6 位验证码" maxlength="8" required>
+            <button id="sendCodeBtn" onclick="sendCode()">发送验证码</button>
+        </div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="doRegister()">注 册</button>
+
+    <div class="footer">
+        已有账号？<a href="/login">立即登录</a>
+    </div>
+</div>
+
+<script>
+let codeTimer = 0;
+
+function showMsg(text, cls) {
+    const box = document.getElementById('msgBox');
+    box.textContent = text;
+    box.className = 'msg show ' + cls;
+}
+
+function hideMsg() {
+    document.getElementById('msgBox').className = 'msg';
+}
+
+// 👁 密码显示/隐藏切换
+function togglePwd(inputId, btn) {
+    const inp = document.getElementById(inputId);
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        btn.textContent = '🙈';
+    } else {
+        inp.type = 'password';
+        btn.textContent = '👁';
+    }
+}
+
+// 发送验证码
+async function sendCode() {
+    const email = document.getElementById('email').value.trim();
+    if (!email) { showMsg('请先输入邮箱地址', 'error'); return; }
+
+    const btn = document.getElementById('sendCodeBtn');
+    btn.disabled = true;
+    btn.textContent = '发送中...';
+    showMsg('正在发送验证码...', 'info');
+
+    try {
+        const res = await fetch('/api/send-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, type: 1 })
+        });
+        const data = await res.json();
+        if (data.success) {
+            // 回显验证码到输入框（调试模式）
+            if (data.code) {
+                document.getElementById('code').value = data.code;
+                showMsg('验证码已生成: ' + data.code + '（已自动填入）', 'success');
+            } else {
+                showMsg('验证码已发送，请查收邮件', 'success');
+            }
+            let sec = 60;
+            codeTimer = setInterval(() => {
+                sec--;
+                if (sec <= 0) {
+                    clearInterval(codeTimer);
+                    btn.disabled = false;
+                    btn.textContent = '重新发送';
+                } else {
+                    btn.textContent = sec + 's 后重发';
+                }
+            }, 1000);
+        } else {
+            showMsg(data.message || '发送失败', 'error');
+            btn.disabled = false;
+            btn.textContent = '发送验证码';
+        }
+    } catch (e) {
+        showMsg('网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = '发送验证码';
+    }
+}
+
+// 注册
+async function doRegister() {
+    const username = document.getElementById('username').value.trim();
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const confirm  = document.getElementById('confirm_password').value;
+    const code     = document.getElementById('code').value.trim();
+
+    if (!username || !email || !password || !confirm || !code) {
+        showMsg('请填写所有字段', 'error'); return;
+    }
+    if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
+        showMsg('用户名格式不正确（4-20 位字母、数字或下划线）', 'error'); return;
+    }
+    if (password.length < 6) {
+        showMsg('密码至少需要 6 位字符', 'error'); return;
+    }
+    if (password !== confirm) {
+        showMsg('两次输入的密码不一致', 'error'); return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '注册中...';
+
+    try {
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code, password, username })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showMsg('注册成功！即将跳转登录页...', 'success');
+            setTimeout(() => { window.location.href = '/login?reg=success'; }, 1500);
+        } else {
+            showMsg(data.message || '注册失败', 'error');
+            btn.disabled = false;
+            btn.textContent = '注 册';
+        }
+    } catch (e) {
+        showMsg('网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = '注 册';
+    }
+}
+
+// 密码强度指示
+function updateStrength() {
+    const pwd = document.getElementById('password').value;
+    const bar = document.getElementById('strengthBar');
+    let score = 0;
+    if (pwd.length >= 6) score++;
+    if (pwd.length >= 10) score++;
+    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+    if (/\d/.test(pwd)) score++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) score++;
+    const w = ['0%','20%','40%','60%','80%','100%'];
+    const c = ['#e0e0e0','#e53e3e','#ed8936','#ecc94b','#48bb78','#38a169'];
+    bar.style.width = w[score]; bar.style.background = c[score];
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChat - 登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            background: url('/static/backgrounds/gyx.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 0;
+        }
+        .container {
+            position: relative; z-index: 1;
+            background: rgba(255,255,255,0.95); border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            padding: 44px 40px; width: 420px; max-width: 90vw;
+            backdrop-filter: blur(4px);
+        }
+        .logo { text-align: center; font-size: 48px; margin-bottom: 4px; }
+        h1 { text-align: center; color: #333; margin-bottom: 4px; font-size: 22px; }
+        .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 28px; }
+        .form-group { margin-bottom: 18px; }
+        label { display: block; color: #555; font-size: 13px; margin-bottom: 4px; font-weight: 500; }
+        input[type="email"] {
+            width: 100%; padding: 10px 14px;
+            border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 15px; transition: border-color 0.3s, box-shadow 0.3s; outline: none;
+        }
+        input[type="email"]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
+
+        .pwd-wrap { position: relative; }
+        .pwd-wrap input {
+            width: 100%; padding: 10px 44px 10px 14px;
+            border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 15px; transition: border-color 0.3s, box-shadow 0.3s; outline: none;
+        }
+        .pwd-wrap input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
+        .pwd-toggle {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 18px;
+            padding: 4px 6px; color: #999; line-height: 1; user-select: none;
+        }
+        .pwd-toggle:hover { color: #333; }
+
+        button.submit-btn {
+            width: 100%; padding: 13px; margin-top: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 8px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button.submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+        button.submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .msg { text-align: center; padding: 10px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; display: none; }
+        .msg.show { display: block; }
+        .msg.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
+        .msg.success { background: #f0fff4; color: #38a169; border: 1px solid #c6f6d5; }
+        .msg.info { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+
+        .footer { text-align: center; color: #999; font-size: 13px; margin-top: 22px; }
+        .footer a { color: #667eea; text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="logo">💬</div>
+    <h1>MyChat 聊天室</h1>
+    <p class="subtitle">使用邮箱登录你的账号</p>
+    <div id="msgBox" class="msg"></div>
+
+    <!-- 邮箱 -->
+    <div class="form-group">
+        <label for="email">邮箱</label>
+        <input type="email" id="email" placeholder="请输入邮箱地址"
+               required autofocus autocomplete="email">
+    </div>
+
+    <!-- 密码 -->
+    <div class="form-group">
+        <label for="password">密码</label>
+        <div class="pwd-wrap">
+            <input type="password" id="password" placeholder="请输入密码"
+                   required autocomplete="current-password">
+            <button type="button" class="pwd-toggle" onclick="togglePwd()" title="显示/隐藏密码">👁</button>
+        </div>
+    </div>
+
+    <button class="submit-btn" id="loginBtn" onclick="doLogin()">登 录</button>
+
+    <div class="footer">
+        还没有账号？<a href="/register">立即注册</a>
+    </div>
+</div>
+
+<script>
+// 👁 密码显示/隐藏切换
+function togglePwd() {
+    const inp = document.getElementById('password');
+    const btn = inp.parentElement.querySelector('.pwd-toggle');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        btn.textContent = '🙈';
+    } else {
+        inp.type = 'password';
+        btn.textContent = '👁';
+    }
+}
+
+function showMsg(text, cls) {
+    const box = document.getElementById('msgBox');
+    box.textContent = text;
+    box.className = 'msg show ' + cls;
+}
+
+// 显示注册成功消息
+const params = new URLSearchParams(window.location.search);
+if (params.get('reg') === 'success') {
+    showMsg('注册成功！请使用邮箱和密码登录', 'success');
+}
+
+async function doLogin() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+        showMsg('请输入邮箱和密码', 'error'); return;
+    }
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.textContent = '登录中...';
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showMsg('登录成功！即将跳转...', 'success');
+            document.cookie = 'username_display=' + encodeURIComponent(data.user.username) + ';path=/';
+            setTimeout(() => { window.location.href = '/?user=' + encodeURIComponent(data.user.username); }, 1000);
+        } else {
+            showMsg(data.message || '登录失败', 'error');
+            btn.disabled = false;
+            btn.textContent = '登 录';
+        }
+    } catch (e) {
+        showMsg('网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = '登 录';
+    }
+}
+
+// 回车登录
+document.getElementById('password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>
