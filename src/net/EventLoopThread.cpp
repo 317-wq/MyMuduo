@@ -11,7 +11,7 @@ void EventLoopThread::ThreadFunc(){
         _cond.notify_one();
     }
 
-    // workt-hread进行事件循环
+    // work-thread进行事件循环
     _loop->Loop();
     // 任务执行完成
     {

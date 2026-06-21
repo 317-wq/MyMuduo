@@ -12,6 +12,7 @@ void EventLoopThreadPool::Start(){
         // std::unique_ptr<EventLoopThread> work_thread = std::make_unique<EventLoopThread>();
         auto work_thread = std::make_unique<EventLoopThread>();
         // 将loop设置进去并且返回对应的loop交付存储
+        // StartLoop就是创建对应工作线程的loop，并设置回调函数，处理事件派发，执行活跃连接的任务
         EventLoop *loop = work_thread->StartLoop();
         _loops.push_back(loop);
         // 临时对象转移资源

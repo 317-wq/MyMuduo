@@ -25,7 +25,7 @@ public:
     // 启动线程池
     void Start();
 
-    // 获取下一个loop，用于轮询发布任务
+    // 获取下一个loop，用于轮询发布任务[负载均衡]
     EventLoop* GetNextLoop();
     
     ~EventLoopThreadPool();
