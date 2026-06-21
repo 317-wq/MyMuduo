@@ -82,3 +82,6 @@ coverage/
 .cache/
 
 CLAUDE.md
+config.ini
+compile_flags.txt
+.clangd
