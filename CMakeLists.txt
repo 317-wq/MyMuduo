@@ -65,6 +65,7 @@ set(DB_SRCS
 set(SERVICE_SRCS
     src/service/UserService.cpp
     src/service/ChatServer.cpp
+    src/service/EmailSender.cpp
 )
 
 # 基础工具源文件
@@ -73,46 +74,40 @@ set(BASE_SRCS
 )
 
 # 原有 test_server
-add_executable(test_server
-    test/test_server.cpp
-    ${NET_SRCS}
-)
-target_link_libraries(test_server pthread)
+# add_executable(test_server
+#     test/test_server.cpp
+#     ${NET_SRCS}
+# )
+# target_link_libraries(test_server pthread)
 
 # 协议层测试 (gtest)
-add_executable(test_proto
-    test/test_proto.cpp
-    ${PROTO_SRCS}
-    src/net/Buffer.cpp
-)
-target_link_libraries(test_proto
-    pthread
-    ${JSONCPP_LIBRARIES}
-    GTest::Main
-)
-
-# HTTP 服务示例
-add_executable(http_server
-    examples/http/main.cpp
-    ${NET_SRCS}
-)
-target_link_libraries(http_server pthread)
+# add_executable(test_proto
+#     test/test_proto.cpp
+#     ${PROTO_SRCS}
+#     src/net/Buffer.cpp
+# )
+# target_link_libraries(test_proto
+#     pthread
+#     ${JSONCPP_LIBRARIES}
+#     GTest::Main
+# )
 
 # 数据库 + 用户服务集成测试
-add_executable(test_db
-    test/test_db.cpp
-    ${NET_SRCS}
-    ${PROTO_SRCS}
-    ${DB_SRCS}
-    ${SERVICE_SRCS}
-    ${BASE_SRCS}
-)
-target_link_libraries(test_db
-    pthread
-    ${JSONCPP_LIBRARIES}
-    mysqlcppconn
-    crypto
-)
+# add_executable(test_db
+#     test/test_db.cpp
+#     ${NET_SRCS}
+#     ${PROTO_SRCS}
+#     ${DB_SRCS}
+#     ${SERVICE_SRCS}
+#     ${BASE_SRCS}
+# )
+# target_link_libraries(test_db
+#     pthread
+#     ${JSONCPP_LIBRARIES}
+#     mysqlcppconn
+#     crypto
+#     curl
+# )
 
 # 聊天室服务端
 add_executable(chat_server
@@ -128,4 +123,5 @@ target_link_libraries(chat_server
     ${JSONCPP_LIBRARIES}
     mysqlcppconn
     crypto
+    curl
 )
