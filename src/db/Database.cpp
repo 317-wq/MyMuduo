@@ -55,9 +55,12 @@ void Database::WorkerThread()
         sql::Connection* conn = _pool.Borrow(5000);
         if (!conn) {
             // 池已关闭或超时，跳过此任务
-            // 将错误回调投递回 EventLoop
-            if (task.callback && task.loop) {
-                task.loop->QueueInLoop(std::move(task.callback));
+            if (task.callback) {
+                if (task.loop) {
+                    task.loop->QueueInLoop(std::move(task.callback));
+                } else {
+                    task.callback();
+                }
             }
             continue;
         }
@@ -77,9 +80,13 @@ void Database::WorkerThread()
             _pool.Return(conn);
         }
 
-        // 将回调投递回 EventLoop 线程
-        if (task.callback && task.loop) {
-            task.loop->QueueInLoop(std::move(task.callback));
+        // 将回调投递回 EventLoop 线程（loop 为 nullptr 时直接执行）
+        if (task.callback) {
+            if (task.loop) {
+                task.loop->QueueInLoop(std::move(task.callback));
+            } else {
+                task.callback();  // 同步模式：直接在 DB worker 线程执行
+            }
         }
     }
 }
