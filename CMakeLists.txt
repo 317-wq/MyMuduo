@@ -59,6 +59,8 @@ set(DB_SRCS
     src/db/Database.cpp
     src/db/UserDao.cpp
     src/db/ConnectionPool.cpp
+    src/db/FriendDao.cpp
+    src/db/PrivateMessageDao.cpp
 )
 
 # 业务层源文件
@@ -66,6 +68,7 @@ set(SERVICE_SRCS
     src/service/UserService.cpp
     src/service/ChatServer.cpp
     src/service/EmailSender.cpp
+    src/service/FriendService.cpp
 )
 
 # 基础工具源文件
@@ -88,16 +91,16 @@ set(CACHE_SRCS
 # target_link_libraries(test_server pthread)
 
 # 协议层测试 (gtest)
-# add_executable(test_proto
-#     test/test_proto.cpp
-#     ${PROTO_SRCS}
-#     src/net/Buffer.cpp
-# )
-# target_link_libraries(test_proto
-#     pthread
-#     ${JSONCPP_LIBRARIES}
-#     GTest::Main
-# )
+add_executable(test_proto
+    test/test_proto.cpp
+    ${PROTO_SRCS}
+    src/net/Buffer.cpp
+)
+target_link_libraries(test_proto
+    pthread
+    ${JSONCPP_LIBRARIES}
+    GTest::Main
+)
 
 # 数据库 + 用户服务集成测试
 # add_executable(test_db
@@ -117,9 +120,10 @@ set(CACHE_SRCS
 # )
 
 # Redis 连接池测试 (gtest)
+# 只链接 RedisPool.cpp — 不需要 RedisCache（它依赖 EventLoop）
 add_executable(test_redis_pool
     test/test_redis_pool.cpp
-    ${CACHE_SRCS}
+    src/cache/RedisPool.cpp
 )
 target_link_libraries(test_redis_pool
     pthread
@@ -168,6 +172,38 @@ target_link_libraries(test_user_service_redis
     mysqlcppconn
     crypto
     curl
+    GTest::Main
+)
+
+# 好友 DAO 测试 (gtest)
+add_executable(test_friend_dao
+    test/test_friend_dao.cpp
+    ${DB_SRCS}
+    ${NET_SRCS}
+)
+target_link_libraries(test_friend_dao
+    pthread
+    mysqlcppconn
+    GTest::Main
+)
+
+# 好友服务层集成测试 (gtest)
+add_executable(test_friend_service
+    test/test_friend_service.cpp
+    ${DB_SRCS}
+    ${SERVICE_SRCS}
+    ${PROTO_SRCS}
+    ${BASE_SRCS}
+    ${CACHE_SRCS}
+    ${NET_SRCS}
+)
+target_link_libraries(test_friend_service
+    pthread
+    mysqlcppconn
+    hiredis
+    crypto
+    curl
+    ${JSONCPP_LIBRARIES}
     GTest::Main
 )
 
