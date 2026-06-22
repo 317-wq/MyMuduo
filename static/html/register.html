@@ -11,7 +11,7 @@
             min-height: 100vh;
             display: flex; align-items: center; justify-content: center;
             position: relative;
-            background: url('/static/backgrounds/gyx.jpg') no-repeat center center fixed;
+            background: url('/static/backgrounds/008.png') no-repeat center center fixed;
             background-size: cover;
         }
         body::before {
@@ -22,14 +22,16 @@
         }
         .container {
             position: relative; z-index: 1;
-            background: rgba(255,255,255,0.95); border-radius: 16px;
+            background: rgba(255,255,255,0.65); border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.4);
             padding: 40px 36px; width: 440px; max-width: 90vw;
             backdrop-filter: blur(4px);
+            transform: translateX(-80px);
         }
-        .logo { text-align: center; font-size: 48px; margin-bottom: 4px; }
-        h1 { text-align: center; color: #333; margin-bottom: 4px; font-size: 22px; }
-        .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 24px; }
+        @media (max-width: 800px) {
+            .container { transform: none; }
+        }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; font-size: 22px; }
         .form-group { margin-bottom: 16px; }
         label { display: block; color: #555; font-size: 13px; margin-bottom: 4px; font-weight: 500; }
         input[type="text"], input[type="email"], input[type="password"] {
@@ -37,7 +39,7 @@
             border: 2px solid #e0e0e0; border-radius: 8px;
             font-size: 15px; transition: border-color 0.3s; outline: none;
         }
-        input:focus { border-color: #11998e; box-shadow: 0 0 0 3px rgba(17,153,142,0.12); }
+        input:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,0.12); }
 
         .pwd-wrap { position: relative; }
         .pwd-wrap input { padding-right: 44px; }
@@ -46,13 +48,30 @@
             background: none; border: none; cursor: pointer; font-size: 18px;
             padding: 4px 6px; color: #999; line-height: 1; user-select: none;
         }
+        /* 密码可见时：在眼睛上画斜杠 */
+        .pwd-toggle.showing::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 22px; height: 2.5px;
+            background: #333;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            border-radius: 2px;
+            pointer-events: none;
+        }
         .pwd-toggle:hover { color: #333; }
+
+        /* 隐藏浏览器自带的密码显示按钮（Edge/IE） */
+        .pwd-wrap input[type="password"]::-ms-reveal,
+        .pwd-wrap input[type="password"]::-ms-clear {
+            display: none;
+        }
 
         .code-row { display: flex; gap: 10px; }
         .code-row input { flex: 1; }
         .code-row button {
             white-space: nowrap; padding: 10px 14px;
-            background: #11998e; color: white; border: none;
+            background: #0d9488; color: white; border: none;
             border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
             transition: opacity 0.3s;
         }
@@ -61,12 +80,12 @@
 
         .submit-btn {
             width: 100%; padding: 13px; margin-top: 8px;
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
             color: white; border: none; border-radius: 8px;
             font-size: 15px; font-weight: 600; cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(17,153,142,0.35); }
+        .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(13,148,136,0.35); }
         .submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
 
         .msg { text-align: center; padding: 10px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; display: none; }
@@ -79,14 +98,12 @@
         .password-strength-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
 
         .footer { text-align: center; color: #999; font-size: 13px; margin-top: 20px; }
-        .footer a { color: #11998e; text-decoration: none; font-weight: 500; }
+        .footer a { color: #0d9488; text-decoration: none; font-weight: 500; }
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="logo">✨</div>
     <h1>创建账号</h1>
-    <p class="subtitle">注册 MyChat 账号，加入聊天</p>
     <div id="msgBox" class="msg"></div>
 
     <!-- 用户名 -->
@@ -108,7 +125,7 @@
         <div class="pwd-wrap">
             <input type="password" id="password" placeholder="至少 6 位字符" required minlength="6"
                    oninput="updateStrength()">
-            <button type="button" class="pwd-toggle" onclick="togglePwd('password', this)" title="显示/隐藏密码">👁</button>
+            <button type="button" class="pwd-toggle" tabindex="-1" onclick="togglePwd('password', this)" title="显示密码">👁</button>
         </div>
         <div class="password-strength"><div class="password-strength-bar" id="strengthBar" style="width:0;"></div></div>
     </div>
@@ -118,7 +135,7 @@
         <label for="confirm_password">确认密码</label>
         <div class="pwd-wrap">
             <input type="password" id="confirm_password" placeholder="请再次输入密码" required minlength="6">
-            <button type="button" class="pwd-toggle" onclick="togglePwd('confirm_password', this)" title="显示/隐藏密码">👁</button>
+            <button type="button" class="pwd-toggle" tabindex="-1" onclick="togglePwd('confirm_password', this)" title="显示密码">👁</button>
         </div>
     </div>
 
@@ -151,16 +168,24 @@ function hideMsg() {
     document.getElementById('msgBox').className = 'msg';
 }
 
-// 👁 密码显示/隐藏切换
+// 密码显示/隐藏切换（隐藏时 👁，可见时 👁 加斜杠）
 function togglePwd(inputId, btn) {
     const inp = document.getElementById(inputId);
-    if (inp.type === 'password') {
-        inp.type = 'text';
-        btn.textContent = '🙈';
+    if (!inp) return;
+    const wasHidden = inp.type === 'password';
+    const start = inp.selectionStart;
+    const end   = inp.selectionEnd;
+    inp.type = wasHidden ? 'text' : 'password';
+    if (wasHidden) {
+        btn.classList.add('showing');
+        btn.title = '隐藏密码';
     } else {
-        inp.type = 'password';
-        btn.textContent = '👁';
+        btn.classList.remove('showing');
+        btn.title = '显示密码';
     }
+    // 恢复光标位置并保持焦点
+    try { inp.setSelectionRange(start, end); } catch (_) {}
+    inp.focus();
 }
 
 // 发送验证码

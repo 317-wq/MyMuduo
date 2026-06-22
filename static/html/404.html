@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - 页面未找到 | MyChat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            background: url('/static/backgrounds/008.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 0;
+        }
+        .container {
+            position: relative; z-index: 1;
+            background: rgba(255,255,255,0.95); border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            padding: 48px 44px; width: 440px; max-width: 90vw;
+            backdrop-filter: blur(4px);
+            text-align: center;
+        }
+        .error-code {
+            font-size: 96px; font-weight: 800; line-height: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .error-icon { font-size: 56px; margin-bottom: 8px; }
+        h1 { color: #333; font-size: 20px; margin: 8px 0; }
+        p { color: #888; font-size: 14px; margin-bottom: 28px; line-height: 1.6; }
+        .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
+            cursor: pointer; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(102,126,234,0.35); }
+        .btn-outline {
+            background: transparent; color: #667eea; border: 2px solid #667eea;
+        }
+        .btn-outline:hover { background: rgba(102,126,234,0.06); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="error-icon">🔍</div>
+    <div class="error-code">404</div>
+    <h1>页面未找到</h1>
+    <p>你访问的页面不存在或已被移除。<br>请检查 URL 是否正确，或返回首页。</p>
+    <div class="actions">
+        <a href="/" class="btn btn-primary">返回首页</a>
+    </div>
+</div>
+</body>
+</html>
