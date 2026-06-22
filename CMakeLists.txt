@@ -73,6 +73,13 @@ set(BASE_SRCS
     src/base/Crypto.cpp
 )
 
+# 缓存层源文件
+set(CACHE_SRCS
+    src/cache/RedisPool.cpp
+    src/cache/RedisCache.cpp
+    src/cache/RedisDao.cpp
+)
+
 # 原有 test_server
 # add_executable(test_server
 #     test/test_server.cpp
@@ -109,6 +116,61 @@ set(BASE_SRCS
 #     curl
 # )
 
+# Redis 连接池测试 (gtest)
+add_executable(test_redis_pool
+    test/test_redis_pool.cpp
+    ${CACHE_SRCS}
+)
+target_link_libraries(test_redis_pool
+    pthread
+    hiredis
+    GTest::Main
+)
+
+# Redis 异步执行器测试 (gtest)
+add_executable(test_redis_cache
+    test/test_redis_cache.cpp
+    ${CACHE_SRCS}
+    ${NET_SRCS}
+)
+target_link_libraries(test_redis_cache
+    pthread
+    hiredis
+    GTest::Main
+)
+
+# Redis DAO 数据访问层测试 (gtest) — 只用 RedisPool + RedisDao，不需要 RedisCache
+add_executable(test_redis_dao
+    test/test_redis_dao.cpp
+    src/cache/RedisPool.cpp
+    src/cache/RedisDao.cpp
+)
+target_link_libraries(test_redis_dao
+    pthread
+    hiredis
+    GTest::Main
+)
+
+# UserService + Redis 缓存集成测试 (gtest)
+add_executable(test_user_service_redis
+    test/test_user_service_redis.cpp
+    ${CACHE_SRCS}
+    ${DB_SRCS}
+    ${SERVICE_SRCS}
+    ${BASE_SRCS}
+    ${NET_SRCS}
+    ${PROTO_SRCS}
+)
+target_link_libraries(test_user_service_redis
+    pthread
+    hiredis
+    ${JSONCPP_LIBRARIES}
+    mysqlcppconn
+    crypto
+    curl
+    GTest::Main
+)
+
 # 聊天室服务端
 add_executable(chat_server
     examples/chat_server/main.cpp
@@ -117,6 +179,7 @@ add_executable(chat_server
     ${DB_SRCS}
     ${SERVICE_SRCS}
     ${BASE_SRCS}
+    ${CACHE_SRCS}
 )
 target_link_libraries(chat_server
     pthread
@@ -124,4 +187,5 @@ target_link_libraries(chat_server
     mysqlcppconn
     crypto
     curl
+    hiredis
 )
