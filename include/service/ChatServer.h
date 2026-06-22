@@ -28,6 +28,7 @@
 
 #include "base/NoCopy.h"
 #include "db/Database.h"
+#include "cache/RedisCache.h"
 #include "service/UserService.h"
 #include "net/TcpServer.h"
 #include "net/EventLoop.h"
@@ -87,6 +88,7 @@ private:
     // ---------- 组件 ----------
     EventLoop* _base_loop = nullptr;   // 不持有所有权，new/delete 管理
     std::unique_ptr<Database> _db;
+    std::unique_ptr<RedisCache> _redis;
     std::unique_ptr<UserService> _user_service;
     std::unique_ptr<TcpServer> _server;
     Codec _codec;
@@ -107,6 +109,11 @@ private:
     int _server_port = 8888;
     int _thread_num = 4;
     int _timeout = 60;
+
+    // Redis 配置
+    std::string _redis_host = "127.0.0.1";
+    int _redis_port = 6379;
+    int _redis_pool_size = 4;
 
     // 邮件配置
     EmailSender::Config _email_cfg;

@@ -57,6 +57,10 @@ void ChatServer::LoadConfig(const std::string& path)
     _db_name     = ini.GetValue("database", "database", "mymuduo");
     _db_pool_size = static_cast<int>(ini.GetLongValue("database", "pool_size", 4));
 
+    _redis_host      = ini.GetValue("redis", "host", "127.0.0.1");
+    _redis_port      = static_cast<int>(ini.GetLongValue("redis", "port", 6379));
+    _redis_pool_size = static_cast<int>(ini.GetLongValue("redis", "pool_size", 4));
+
     _server_port = static_cast<int>(ini.GetLongValue("server", "port", 8888));
     _thread_num  = static_cast<int>(ini.GetLongValue("server", "threads", 4));
     _timeout     = static_cast<int>(ini.GetLongValue("server", "timeout", 60));
@@ -67,9 +71,11 @@ void ChatServer::LoadConfig(const std::string& path)
     _email_cfg.smtp_pass = ini.GetValue("email", "smtp_password", "");
     _email_cfg.from_name = ini.GetValue("email", "from_name", "MyMuduo");
 
-    LOG_INFO("Config loaded from %s: server=%d, db=%s:%d/%s, pool=%d, threads=%d, smtp=%s:%d",
+    LOG_INFO("Config loaded from %s: server=%d, db=%s:%d/%s, pool=%d, threads=%d, "
+             "redis=%s:%d, smtp=%s:%d",
              path.c_str(), _server_port, _db_host.c_str(), _db_port,
              _db_name.c_str(), _db_pool_size, _thread_num,
+             _redis_host.c_str(), _redis_port,
              _email_cfg.smtp_host.c_str(), _email_cfg.smtp_port);
 }
 
@@ -92,9 +98,22 @@ void ChatServer::Start()
     }
     LOG_INFO("Database connected: %s:%d/%s", _db_host.c_str(), _db_port, _db_name.c_str());
 
-    // 2. 初始化用户服务
+    // 2. 初始化 Redis 缓存（可选，连接失败则降级为纯 MySQL 模式）
+    try {
+        _redis = std::make_unique<RedisCache>(_redis_host, _redis_port, _redis_pool_size);
+        LOG_INFO("Redis cache connected: %s:%d (pool=%d)",
+                 _redis_host.c_str(), _redis_port, _redis_pool_size);
+    } catch (...) {
+        LOG_WARNING("Redis not available, running without cache");
+        _redis.reset();
+    }
+
+    // 3. 初始化用户服务
     _user_service = std::make_unique<UserService>(_db.get(), _base_loop);
     _user_service->SetEmailConfig(_email_cfg);
+    if (_redis) {
+        _user_service->SetRedisCache(_redis.get());
+    }
 
     // 3. 初始化 TcpServer
     _server = std::make_unique<TcpServer>(
