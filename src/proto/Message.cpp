@@ -56,6 +56,26 @@ Message::Ptr Message::Create(MessageType type) {
             return std::make_shared<LogoutRequest>();
         case MessageType::kLogoutResponse:
             return std::make_shared<LogoutResponse>();
+        case MessageType::kSearchUserRequest:
+            return std::make_shared<SearchUserRequest>();
+        case MessageType::kSearchUserResponse:
+            return std::make_shared<SearchUserResponse>();
+        case MessageType::kAddFriendRequest:
+            return std::make_shared<AddFriendRequest>();
+        case MessageType::kAddFriendResponse:
+            return std::make_shared<AddFriendResponse>();
+        case MessageType::kAcceptFriendRequest:
+            return std::make_shared<AcceptFriendRequest>();
+        case MessageType::kAcceptFriendResponse:
+            return std::make_shared<AcceptFriendResponse>();
+        case MessageType::kDeleteFriendRequest:
+            return std::make_shared<DeleteFriendRequest>();
+        case MessageType::kDeleteFriendResponse:
+            return std::make_shared<DeleteFriendResponse>();
+        case MessageType::kFriendListRequest:
+            return std::make_shared<FriendListRequest>();
+        case MessageType::kFriendListResponse:
+            return std::make_shared<FriendListResponse>();
         case MessageType::kError:
             return std::make_shared<ErrorMessage>();
         default:
@@ -309,6 +329,227 @@ Json::Value LogoutResponse::ToJson() const {
 bool LogoutResponse::FromJson(const Json::Value& root) {
     success = root.get("success", false).asBool();
     message = root.get("message", "").asString();
+    return true;
+}
+
+// ============================================================
+// SearchUserRequest
+// ============================================================
+
+Json::Value SearchUserRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "search_user_request";
+    root["keyword"] = keyword;
+    return root;
+}
+
+bool SearchUserRequest::FromJson(const Json::Value& root) {
+    keyword = root.get("keyword", "").asString();
+    return !keyword.empty();
+}
+
+// ============================================================
+// SearchUserResponse
+// ============================================================
+
+Json::Value SearchUserResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "search_user_response";
+    root["success"] = success;
+    Json::Value arr(Json::arrayValue);
+    for (const auto& u : users) {
+        Json::Value item;
+        item["id"] = static_cast<Json::UInt>(u.id);
+        item["email"] = u.email;
+        item["username"] = u.username;
+        item["avatar"] = u.avatar;
+        arr.append(item);
+    }
+    root["users"] = arr;
+    return root;
+}
+
+bool SearchUserResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    const Json::Value& arr = root["users"];
+    if (arr.isArray()) {
+        for (auto& v : arr) {
+            UserItem u;
+            u.id = v.get("id", 0).asUInt();
+            u.email = v.get("email", "").asString();
+            u.username = v.get("username", "").asString();
+            u.avatar = v.get("avatar", "").asString();
+            users.push_back(u);
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// AddFriendRequest
+// ============================================================
+
+Json::Value AddFriendRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "add_friend_request";
+    root["to_user_id"] = static_cast<Json::UInt>(to_user_id);
+    return root;
+}
+
+bool AddFriendRequest::FromJson(const Json::Value& root) {
+    to_user_id = root.get("to_user_id", 0).asUInt();
+    return to_user_id > 0;
+}
+
+// ============================================================
+// AddFriendResponse
+// ============================================================
+
+Json::Value AddFriendResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "add_friend_response";
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool AddFriendResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    return true;
+}
+
+// ============================================================
+// AcceptFriendRequest
+// ============================================================
+
+Json::Value AcceptFriendRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "accept_friend_request";
+    root["request_id"] = static_cast<Json::UInt>(request_id);
+    return root;
+}
+
+bool AcceptFriendRequest::FromJson(const Json::Value& root) {
+    request_id = root.get("request_id", 0).asUInt();
+    return request_id > 0;
+}
+
+// ============================================================
+// AcceptFriendResponse
+// ============================================================
+
+Json::Value AcceptFriendResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "accept_friend_response";
+    root["success"] = success;
+    root["message"] = message;
+    if (success) {
+        root["friend_id"] = static_cast<Json::UInt>(friend_id);
+        root["friend_email"] = friend_email;
+        root["friend_username"] = friend_username;
+        root["friend_avatar"] = friend_avatar;
+    }
+    return root;
+}
+
+bool AcceptFriendResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    friend_id = root.get("friend_id", 0).asUInt();
+    friend_email = root.get("friend_email", "").asString();
+    friend_username = root.get("friend_username", "").asString();
+    friend_avatar = root.get("friend_avatar", "").asString();
+    return true;
+}
+
+// ============================================================
+// DeleteFriendRequest
+// ============================================================
+
+Json::Value DeleteFriendRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "delete_friend_request";
+    root["friend_id"] = static_cast<Json::UInt>(friend_id);
+    return root;
+}
+
+bool DeleteFriendRequest::FromJson(const Json::Value& root) {
+    friend_id = root.get("friend_id", 0).asUInt();
+    return friend_id > 0;
+}
+
+// ============================================================
+// DeleteFriendResponse
+// ============================================================
+
+Json::Value DeleteFriendResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "delete_friend_response";
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool DeleteFriendResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    return true;
+}
+
+// ============================================================
+// FriendListRequest
+// ============================================================
+
+Json::Value FriendListRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "friend_list_request";
+    return root;
+}
+
+bool FriendListRequest::FromJson(const Json::Value& root) {
+    (void)root;
+    return true;
+}
+
+// ============================================================
+// FriendListResponse
+// ============================================================
+
+Json::Value FriendListResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "friend_list_response";
+    root["success"] = success;
+    Json::Value arr(Json::arrayValue);
+    for (const auto& f : friends) {
+        Json::Value item;
+        item["id"] = static_cast<Json::UInt>(f.id);
+        item["email"] = f.email;
+        item["username"] = f.username;
+        item["avatar"] = f.avatar;
+        item["remark"] = f.remark;
+        item["online"] = f.online;
+        arr.append(item);
+    }
+    root["friends"] = arr;
+    return root;
+}
+
+bool FriendListResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    const Json::Value& arr = root["friends"];
+    if (arr.isArray()) {
+        for (auto& v : arr) {
+            FriendItem f;
+            f.id = v.get("id", 0).asUInt();
+            f.email = v.get("email", "").asString();
+            f.username = v.get("username", "").asString();
+            f.avatar = v.get("avatar", "").asString();
+            f.remark = v.get("remark", "").asString();
+            f.online = v.get("online", false).asBool();
+            friends.push_back(f);
+        }
+    }
     return true;
 }
 

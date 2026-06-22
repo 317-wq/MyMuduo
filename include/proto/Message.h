@@ -16,6 +16,7 @@
 #include <jsoncpp/json/json.h>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstdint>
 
 class Message {
@@ -184,6 +185,128 @@ public:
 
     bool success = false;
     std::string message;
+};
+
+// ---------- 搜索用户请求 ----------
+class SearchUserRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kSearchUserRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    std::string keyword;
+};
+
+// ---------- 搜索用户响应 ----------
+class SearchUserResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kSearchUserResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    // users: [{id, email, username, avatar}, ...]
+    struct UserItem {
+        uint32_t id = 0;
+        std::string email;
+        std::string username;
+        std::string avatar;
+    };
+    std::vector<UserItem> users;
+};
+
+// ---------- 添加好友请求 ----------
+class AddFriendRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kAddFriendRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t to_user_id = 0;
+};
+
+// ---------- 添加好友响应 ----------
+class AddFriendResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kAddFriendResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+};
+
+// ---------- 同意好友请求 ----------
+class AcceptFriendRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kAcceptFriendRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t request_id = 0;
+};
+
+// ---------- 同意好友响应 ----------
+class AcceptFriendResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kAcceptFriendResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+    uint32_t friend_id = 0;
+    std::string friend_email;
+    std::string friend_username;
+    std::string friend_avatar;
+};
+
+// ---------- 删除好友请求 ----------
+class DeleteFriendRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kDeleteFriendRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t friend_id = 0;
+};
+
+// ---------- 删除好友响应 ----------
+class DeleteFriendResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kDeleteFriendResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+};
+
+// ---------- 好友列表请求 ----------
+class FriendListRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kFriendListRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+};
+
+// ---------- 好友列表响应 ----------
+class FriendListResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kFriendListResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    struct FriendItem {
+        uint32_t id = 0;
+        std::string email;
+        std::string username;
+        std::string avatar;
+        std::string remark;
+        bool online = false;
+    };
+    std::vector<FriendItem> friends;
 };
 
 // ---------- 错误消息 ----------

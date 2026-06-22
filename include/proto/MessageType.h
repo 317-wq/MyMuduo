@@ -30,6 +30,18 @@ enum class MessageType : uint16_t {
     // 系统消息
     kSystemMessage = 20,
 
+    // 好友相关
+    kSearchUserRequest = 40,
+    kSearchUserResponse = 41,
+    kAddFriendRequest = 42,
+    kAddFriendResponse = 43,
+    kAcceptFriendRequest = 44,
+    kAcceptFriendResponse = 45,
+    kDeleteFriendRequest = 46,
+    kDeleteFriendResponse = 47,
+    kFriendListRequest = 48,
+    kFriendListResponse = 49,
+
     // 登出
     kLogoutRequest = 30,
     kLogoutResponse = 31,
@@ -53,7 +65,17 @@ inline const char* MessageTypeName(MessageType type) {
         case MessageType::kSendCodeResponse: return "SendCodeResponse";
         case MessageType::kChatMessage:      return "ChatMessage";
         case MessageType::kPrivateMessage:   return "PrivateMessage";
-        case MessageType::kSystemMessage:    return "SystemMessage";
+        case MessageType::kSystemMessage:       return "SystemMessage";
+        case MessageType::kSearchUserRequest:   return "SearchUserRequest";
+        case MessageType::kSearchUserResponse:  return "SearchUserResponse";
+        case MessageType::kAddFriendRequest:    return "AddFriendRequest";
+        case MessageType::kAddFriendResponse:   return "AddFriendResponse";
+        case MessageType::kAcceptFriendRequest: return "AcceptFriendRequest";
+        case MessageType::kAcceptFriendResponse:return "AcceptFriendResponse";
+        case MessageType::kDeleteFriendRequest: return "DeleteFriendRequest";
+        case MessageType::kDeleteFriendResponse:return "DeleteFriendResponse";
+        case MessageType::kFriendListRequest:   return "FriendListRequest";
+        case MessageType::kFriendListResponse:  return "FriendListResponse";
         case MessageType::kLogoutRequest:    return "LogoutRequest";
         case MessageType::kLogoutResponse:   return "LogoutResponse";
         case MessageType::kError:            return "Error";
