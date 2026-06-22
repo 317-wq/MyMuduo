@@ -3,6 +3,7 @@
 #include <cppconn/prepared_statement.h>
 #include <cppconn/resultset.h>
 #include <memory>
+#include <vector>
 
 // 用户 CRUD
 
@@ -113,6 +114,151 @@ bool UserDao::UpdateAvatar(sql::Connection* conn,
     stmt->setString(1, avatar_path);
     stmt->setUInt(2, user_id);
     return stmt->executeUpdate() > 0;
+}
+
+// ============================================================
+// 用户档案
+// ============================================================
+
+bool UserDao::GetUserProfile(sql::Connection* conn,
+                             uint32_t user_id,
+                             UserProfile& out)
+{
+    std::unique_ptr<sql::PreparedStatement> stmt(
+        conn->prepareStatement(
+            "SELECT id, email, username, IFNULL(avatar, '') AS avatar, "
+            "gender, IFNULL(birthday, '') AS birthday, "
+            "IFNULL(secondary_email, '') AS secondary_email, created_at "
+            "FROM users WHERE id = ?"));
+
+    stmt->setUInt(1, user_id);
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+
+    if (rs->next()) {
+        out.id              = rs->getUInt("id");
+        out.email           = rs->getString("email");
+        out.username        = rs->getString("username");
+        out.avatar          = rs->getString("avatar");
+        out.gender          = rs->getInt("gender");
+        out.birthday        = rs->getString("birthday");
+        out.secondary_email = rs->getString("secondary_email");
+        out.created_at      = rs->getString("created_at");
+        return true;
+    }
+    return false;
+}
+
+bool UserDao::UpdateProfile(sql::Connection* conn,
+                            uint32_t user_id,
+                            const std::string& username,
+                            int gender,
+                            const std::string& birthday,
+                            const std::string& secondary_email)
+{
+    // 动态构建 SQL，只更新有值的字段
+    std::string sql = "UPDATE users SET ";
+    std::vector<std::string> sets;
+    std::vector<std::string> values;
+
+    if (!username.empty()) {
+        sets.push_back("username = ?");
+        values.push_back(username);
+    }
+    if (gender >= 0 && gender <= 2) {
+        sets.push_back("gender = ?");
+        values.push_back(std::to_string(gender));
+    }
+    if (!birthday.empty()) {
+        sets.push_back("birthday = ?");
+        values.push_back(birthday);
+    }
+    // secondary_email 允许设为空字符串清空
+    sets.push_back("secondary_email = ?");
+    values.push_back(secondary_email);
+
+    if (sets.empty()) return false;
+
+    for (size_t i = 0; i < sets.size(); ++i) {
+        if (i > 0) sql += ", ";
+        sql += sets[i];
+    }
+    sql += " WHERE id = ?";
+
+    std::unique_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(sql));
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (sets[i].find("gender") != std::string::npos) {
+            stmt->setInt(i + 1, std::stoi(values[i]));
+        } else {
+            stmt->setString(i + 1, values[i]);
+        }
+    }
+    stmt->setUInt(values.size() + 1, user_id);
+    return stmt->executeUpdate() > 0;
+}
+
+bool UserDao::DeleteUser(sql::Connection* conn, uint32_t user_id)
+{
+    // 级联删除：私聊消息 → 好友关系 → 验证码 → 用户
+    // 注意：MySQL 不支持一条语句多表删除，需要逐表清理
+
+    bool was_auto_commit = true;
+    try {
+        conn->setAutoCommit(false);
+        was_auto_commit = false;
+
+        // 1. 删除与该用户相关的私聊消息
+        {
+            std::unique_ptr<sql::PreparedStatement> stmt(
+                conn->prepareStatement(
+                    "DELETE FROM private_messages WHERE from_user_id = ? OR to_user_id = ?"));
+            stmt->setUInt(1, user_id);
+            stmt->setUInt(2, user_id);
+            stmt->executeUpdate();
+        }
+
+        // 2. 删除所有好友关系
+        {
+            std::unique_ptr<sql::PreparedStatement> stmt(
+                conn->prepareStatement(
+                    "DELETE FROM friends WHERE user_id = ? OR friend_id = ?"));
+            stmt->setUInt(1, user_id);
+            stmt->setUInt(2, user_id);
+            stmt->executeUpdate();
+        }
+
+        // 3. 删除验证码
+        {
+            std::unique_ptr<sql::PreparedStatement> stmt(
+                conn->prepareStatement(
+                    "DELETE FROM verification_codes WHERE email = "
+                    "(SELECT email FROM users WHERE id = ?)"));
+            stmt->setUInt(1, user_id);
+            stmt->executeUpdate();
+        }
+
+        // 4. 删除用户
+        {
+            std::unique_ptr<sql::PreparedStatement> stmt(
+                conn->prepareStatement("DELETE FROM users WHERE id = ?"));
+            stmt->setUInt(1, user_id);
+            if (stmt->executeUpdate() == 0) {
+                conn->rollback();
+                conn->setAutoCommit(true);
+                return false;
+            }
+        }
+
+        conn->commit();
+        conn->setAutoCommit(true);
+        return true;
+
+    } catch (const sql::SQLException&) {
+        if (!was_auto_commit) {
+            conn->rollback();
+            conn->setAutoCommit(true);
+        }
+        return false;
+    }
 }
 
 // ============================================================

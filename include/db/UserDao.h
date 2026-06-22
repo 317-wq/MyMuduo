@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <string>
 
-// 用户信息结构体
+// 用户信息结构体（含密码等敏感字段，仅内部使用）
 struct UserInfo {
     uint32_t    id = 0;
     std::string email;
@@ -24,6 +24,18 @@ struct UserInfo {
     std::string avatar;
     std::string created_at;
     std::string updated_at;
+};
+
+// 用户公开档案（不含密码/盐）
+struct UserProfile {
+    uint32_t id = 0;
+    std::string email;
+    std::string username;
+    std::string avatar;
+    int gender = 0;              // 0=未设置, 1=男, 2=女
+    std::string birthday;        // "YYYY-MM-DD"
+    std::string secondary_email;
+    std::string created_at;
 };
 
 class UserDao {
@@ -54,6 +66,22 @@ public:
     static bool UpdateAvatar(sql::Connection* conn,
                              uint32_t user_id,
                              const std::string& avatar_path);
+
+    // 获取用户公开档案（给前端展示用，不含密码）
+    static bool GetUserProfile(sql::Connection* conn,
+                               uint32_t user_id,
+                               UserProfile& out);
+
+    // 更新个人资料（仅更新非空/非默认字段）
+    static bool UpdateProfile(sql::Connection* conn,
+                              uint32_t user_id,
+                              const std::string& username,
+                              int gender,
+                              const std::string& birthday,
+                              const std::string& secondary_email);
+
+    // 销毁账号（级联删除所有关联数据）
+    static bool DeleteUser(sql::Connection* conn, uint32_t user_id);
 
     // 插入验证码（type: 1=注册, 2=重置密码）
     // expire_seconds: 多少秒后过期

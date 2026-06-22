@@ -52,9 +52,16 @@ void Database::WorkerThread()
         }
 
         // 从连接池借一个连接
-        sql::Connection* conn = _pool.Borrow(5000);
+        sql::Connection* conn = nullptr;
+        int retries = 3;
+        while (retries-- > 0 && _running) {
+            conn = _pool.Borrow(5000);
+            if (conn) break;
+        }
+
         if (!conn) {
-            // 池已关闭或超时，跳过此任务
+            // 池已关闭或多次重试后仍无法获取连接
+            // 仍然执行 callback 以唤醒 RunDBSync，但 fn 未执行
             if (task.callback) {
                 if (task.loop) {
                     task.loop->QueueInLoop(std::move(task.callback));
