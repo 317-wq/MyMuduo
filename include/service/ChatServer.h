@@ -30,6 +30,7 @@
 #include "db/Database.h"
 #include "cache/RedisCache.h"
 #include "service/UserService.h"
+#include "service/FriendService.h"
 #include "net/TcpServer.h"
 #include "net/EventLoop.h"
 #include "net/TcpConnection.h"
@@ -77,10 +78,21 @@ private:
     void OnLogout(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
     void OnHeartbeat(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
 
+    // 好友相关
+    void OnSearchUser(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnAddFriend(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnAcceptFriend(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnDeleteFriend(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnFriendList(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+
+    // 私聊消息
+    void OnPrivateMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+
     // ---------- 在线用户管理 ----------
     void SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn);
     void SetUserOffline(uint32_t user_id);
     TcpConnection::Ptr GetConnectionByUserId(uint32_t user_id);
+    uint32_t GetUserIdByFd(int fd);
 
     // ---------- 工具 ----------
     void SendMessage(const TcpConnection::Ptr& conn, const Message& msg);
@@ -90,14 +102,18 @@ private:
     std::unique_ptr<Database> _db;
     std::unique_ptr<RedisCache> _redis;
     std::unique_ptr<UserService> _user_service;
+    std::unique_ptr<FriendService> _friend_service;
     std::unique_ptr<TcpServer> _server;
     Codec _codec;
     Dispatcher _dispatcher;
 
     // 在线用户
     std::mutex _online_mutex;
-    // user_id → TcpConnection（弱引用，连接断开后自动失效）
+    // user_id → TcpConnection
     std::unordered_map<uint32_t, TcpConnection::Ptr> _online_users;
+    // fd → user_id（从连接反查用户身份）
+    std::mutex _fd_mutex;
+    std::unordered_map<int, uint32_t> _fd_to_user_id;
 
     // 配置参数
     std::string _db_host = "127.0.0.1";

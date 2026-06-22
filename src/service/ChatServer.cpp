@@ -115,6 +115,12 @@ void ChatServer::Start()
         _user_service->SetRedisCache(_redis.get());
     }
 
+    // 4. 初始化好友服务
+    _friend_service = std::make_unique<FriendService>(_db.get(), _base_loop);
+    if (_redis) {
+        _friend_service->SetRedisCache(_redis.get());
+    }
+
     // 3. 初始化 TcpServer
     _server = std::make_unique<TcpServer>(
         _base_loop, static_cast<uint16_t>(_server_port),
@@ -160,6 +166,34 @@ void ChatServer::Start()
             OnHeartbeat(conn, std::move(msg), ts);
         });
 
+    // 好友相关
+    _dispatcher.Register(MessageType::kSearchUserRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnSearchUser(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kAddFriendRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnAddFriend(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kAcceptFriendRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnAcceptFriend(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kDeleteFriendRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnDeleteFriend(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kFriendListRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnFriendList(conn, std::move(msg), ts);
+        });
+
+    // 私聊消息
+    _dispatcher.Register(MessageType::kPrivateMessage,
+        [this](auto& conn, auto msg, auto ts) {
+            OnPrivateMessage(conn, std::move(msg), ts);
+        });
+
     // 8. 启动 TcpServer
     _server->Start();
     LOG_INFO("ChatServer started on port %d", _server_port);
@@ -189,6 +223,34 @@ void ChatServer::Stop()
 void ChatServer::OnConnection(const TcpConnection::Ptr& conn)
 {
     LOG_INFO("New connection: fd=%d", conn->Fd());
+
+    // 连接关闭时清理 fd→user_id 映射和在线状态
+    conn->SetCloseCallback([this](const TcpConnection::Ptr& c) {
+        int fd = c->Fd();
+        uint32_t user_id = 0;
+        {
+            std::lock_guard<std::mutex> lock(_fd_mutex);
+            auto it = _fd_to_user_id.find(fd);
+            if (it != _fd_to_user_id.end()) {
+                user_id = it->second;
+                _fd_to_user_id.erase(it);
+            }
+        }
+        if (user_id > 0) {
+            {
+                std::lock_guard<std::mutex> lock(_online_mutex);
+                _online_users.erase(user_id);
+            }
+            if (_redis) {
+                _redis->Execute(nullptr,
+                    [user_id](redisContext* ctx) {
+                        RedisDao::SetUserOffline(ctx, user_id);
+                    },
+                    nullptr);
+            }
+        }
+        LOG_INFO("Connection closed: fd=%d user_id=%u", fd, user_id);
+    });
 }
 
 void ChatServer::OnRawMessage(const TcpConnection::Ptr& conn, Buffer* buf)
@@ -332,14 +394,48 @@ void ChatServer::OnHeartbeat(const TcpConnection::Ptr& conn,
 
 void ChatServer::SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn)
 {
-    std::lock_guard<std::mutex> lock(_online_mutex);
-    _online_users[user_id] = conn;
+    {
+        std::lock_guard<std::mutex> lock(_online_mutex);
+        _online_users[user_id] = conn;
+    }
+    {
+        std::lock_guard<std::mutex> lock(_fd_mutex);
+        _fd_to_user_id[conn->Fd()] = user_id;
+    }
+    // Redis 在线状态
+    if (_redis) {
+        _redis->Execute(nullptr,
+            [user_id](redisContext* ctx) {
+                RedisDao::SetUserOnline(ctx, user_id, 180);  // 3 分钟
+            },
+            nullptr);
+    }
 }
 
 void ChatServer::SetUserOffline(uint32_t user_id)
 {
-    std::lock_guard<std::mutex> lock(_online_mutex);
-    _online_users.erase(user_id);
+    // 先获取 fd 用于清理映射
+    int fd = -1;
+    {
+        std::lock_guard<std::mutex> lock(_online_mutex);
+        auto it = _online_users.find(user_id);
+        if (it != _online_users.end()) {
+            fd = it->second->Fd();
+        }
+        _online_users.erase(user_id);
+    }
+    if (fd > 0) {
+        std::lock_guard<std::mutex> lock(_fd_mutex);
+        _fd_to_user_id.erase(fd);
+    }
+    // Redis 离线
+    if (_redis) {
+        _redis->Execute(nullptr,
+            [user_id](redisContext* ctx) {
+                RedisDao::SetUserOffline(ctx, user_id);
+            },
+            nullptr);
+    }
 }
 
 TcpConnection::Ptr ChatServer::GetConnectionByUserId(uint32_t user_id)
@@ -350,6 +446,237 @@ TcpConnection::Ptr ChatServer::GetConnectionByUserId(uint32_t user_id)
         return it->second;
     }
     return nullptr;
+}
+
+uint32_t ChatServer::GetUserIdByFd(int fd)
+{
+    std::lock_guard<std::mutex> lock(_fd_mutex);
+    auto it = _fd_to_user_id.find(fd);
+    if (it != _fd_to_user_id.end()) {
+        return it->second;
+    }
+    return 0;
+}
+
+// ============================================================
+// 好友相关处理器
+// ============================================================
+
+void ChatServer::OnSearchUser(const TcpConnection::Ptr& conn,
+                              Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<SearchUserRequest*>(msg.get());
+    if (!req || req->keyword.empty()) {
+        SendMessage(conn, ErrorMessage{1, "请输入搜索关键词"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    LOG_INFO("SearchUser: fd=%d user_id=%u keyword=%s",
+             conn->Fd(), my_id, req->keyword.c_str());
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _friend_service->SearchUser(req->keyword, my_id,
+        [this, weak_conn](int err, const std::string& msg,
+                          const std::vector<UserInfo>& users) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+
+            SearchUserResponse resp;
+            resp.success = (err == 0);
+            for (auto& u : users) {
+                SearchUserResponse::UserItem item;
+                item.id = u.id;
+                item.email = u.email;
+                item.username = u.username;
+                item.avatar = u.avatar;
+                resp.users.push_back(item);
+            }
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnAddFriend(const TcpConnection::Ptr& conn,
+                             Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<AddFriendRequest*>(msg.get());
+    if (!req || req->to_user_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    LOG_INFO("AddFriend: from=%u to=%u", my_id, req->to_user_id);
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _friend_service->SendFriendRequest(my_id, req->to_user_id,
+        [this, weak_conn](int err, const std::string& msg_str) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            AddFriendResponse resp;
+            resp.success = (err == 0);
+            resp.message = msg_str;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnAcceptFriend(const TcpConnection::Ptr& conn,
+                                Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<AcceptFriendRequest*>(msg.get());
+    if (!req || req->request_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    LOG_INFO("AcceptFriend: user=%u request_id=%u", my_id, req->request_id);
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _friend_service->AcceptFriendRequest(my_id, req->request_id,
+        [this, weak_conn](int err, const std::string& msg_str,
+                          uint32_t friend_id, const std::string& friend_email,
+                          const std::string& friend_username,
+                          const std::string& friend_avatar) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            AcceptFriendResponse resp;
+            resp.success = (err == 0);
+            resp.message = msg_str;
+            resp.friend_id = friend_id;
+            resp.friend_email = friend_email;
+            resp.friend_username = friend_username;
+            resp.friend_avatar = friend_avatar;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnDeleteFriend(const TcpConnection::Ptr& conn,
+                                Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<DeleteFriendRequest*>(msg.get());
+    if (!req || req->friend_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    LOG_INFO("DeleteFriend: user=%u friend=%u", my_id, req->friend_id);
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _friend_service->DeleteFriend(my_id, req->friend_id,
+        [this, weak_conn](int err, const std::string& msg_str) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            DeleteFriendResponse resp;
+            resp.success = (err == 0);
+            resp.message = msg_str;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnFriendList(const TcpConnection::Ptr& conn,
+                              Message::Ptr msg, Timestamp ts)
+{
+    (void)msg;
+    (void)ts;
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _friend_service->GetFriendList(my_id,
+        [this, weak_conn](int err, const std::string& msg_str,
+                          const std::vector<FriendInfo>& friends) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            FriendListResponse resp;
+            resp.success = (err == 0);
+            for (auto& f : friends) {
+                FriendListResponse::FriendItem item;
+                item.id = f.friend_id;
+                item.email = f.email;
+                item.username = f.username;
+                item.avatar = f.avatar;
+                item.remark = f.remark;
+                item.online = f.online;
+                resp.friends.push_back(item);
+            }
+            SendMessage(c, resp);
+        });
+}
+
+// ---------- 私聊消息 ----------
+void ChatServer::OnPrivateMessage(const TcpConnection::Ptr& conn,
+                                   Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<PrivateMessage*>(msg.get());
+    if (!req || req->content.empty()) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    // 从 fd 获取发送者身份（覆盖客户端声明的字段，防伪造）
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    uint32_t to_user_id = req->to_user_id;
+    if (to_user_id == 0 || to_user_id == my_id) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：无效的接收者"});
+        return;
+    }
+
+    LOG_INFO("PrivateMessage: from=%u to=%u content_len=%zu",
+             my_id, to_user_id, req->content.size());
+
+    // 用服务器端的身份信息覆盖消息
+    req->from_user_id = my_id;
+    req->timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
+
+    // 查找接收者的连接
+    TcpConnection::Ptr target_conn = GetConnectionByUserId(to_user_id);
+
+    if (target_conn) {
+        // 接收者在线 → 转发
+        SendMessage(target_conn, *req);
+        LOG_INFO("PrivateMessage forwarded: %u → %u", my_id, to_user_id);
+    }
+
+    // 同时给发送者回显（确认发送成功）
+    // 接收者不在线时，消息仅回显给发送者
+    if (!target_conn) {
+        // 通知发送者对方不在线
+        SystemMessage sys_msg;
+        sys_msg.content = "对方当前离线，消息未送达";
+        sys_msg.timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
+        SendMessage(conn, sys_msg);
+    }
 }
 
 // ============================================================
