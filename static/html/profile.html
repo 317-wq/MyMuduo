@@ -365,8 +365,8 @@
 <div id="toast" class="toast"></div>
 
 <script>
-const userId   = localStorage.getItem('user_id') || '';
-const username = localStorage.getItem('username') || '';
+const userId   = sessionStorage.getItem('user_id') || '';
+const username = sessionStorage.getItem('username') || '';
 
 if (!userId) { window.location.href = '/login'; }
 
@@ -673,7 +673,7 @@ async function saveProfile() {
         const data = await resp.json();
         showToast(data.message, data.success ? 'success' : 'error');
         if (data.success) {
-            if (body.username) localStorage.setItem('username', body.username);
+            if (body.username) sessionStorage.setItem('username', body.username);
             await loadProfile();
         }
     } catch (e) { showToast('保存失败', 'error'); }
@@ -748,7 +748,8 @@ async function executeDeleteAccount() {
         if (data.success) {
             closeDeleteModal();
             showToast('账号已销毁，即将跳转...', 'success');
-            localStorage.clear();
+            sessionStorage.clear();
+            localStorage.clear();  // 账号已销毁，清除本地删除记录等
             setTimeout(() => { window.location.href = '/login'; }, 1500);
         } else {
             showToast(data.message || '销毁失败', 'error');

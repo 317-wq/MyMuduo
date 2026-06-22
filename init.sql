@@ -69,7 +69,13 @@ CREATE TABLE IF NOT EXISTS private_messages (
 -- ============================================================
 -- 升级已有数据库（如果列已存在会报错，可忽略）
 -- ============================================================
-ALTER TABLE users ADD COLUMN gender TINYINT NOT NULL DEFAULT 0 COMMENT '0=未设置, 1=男, 2=女';
-ALTER TABLE users ADD COLUMN birthday DATE DEFAULT NULL;
-ALTER TABLE users ADD COLUMN secondary_email VARCHAR(255) DEFAULT '' COMMENT '备用邮箱';
-ALTER TABLE friends ADD COLUMN remark VARCHAR(64) DEFAULT '' COMMENT '好友备注名';
+-- ALTER TABLE users ADD COLUMN gender TINYINT NOT NULL DEFAULT 0 COMMENT '0=未设置, 1=男, 2=女';
+-- ALTER TABLE users ADD COLUMN birthday DATE DEFAULT NULL;
+-- ALTER TABLE users ADD COLUMN secondary_email VARCHAR(255) DEFAULT '' COMMENT '备用邮箱';
+-- ALTER TABLE friends ADD COLUMN remark VARCHAR(64) DEFAULT '' COMMENT '好友备注名';
+
+-- 消息增强功能
+-- ALTER TABLE private_messages ADD COLUMN is_revoked TINYINT NOT NULL DEFAULT 0 COMMENT '0=正常, 1=已撤回';
+-- ALTER TABLE private_messages ADD COLUMN reply_to_id INT UNSIGNED DEFAULT NULL COMMENT '回复的消息ID';
+-- ALTER TABLE private_messages ADD COLUMN reply_preview VARCHAR(200) DEFAULT '' COMMENT '被回复消息的摘要';
+-- ALTER TABLE private_messages ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;

@@ -174,11 +174,11 @@ async function doLogin() {
         const data = await res.json();
         if (data.success) {
             showMsg('登录成功！即将跳转...', 'success');
-            // 保存用户信息到 localStorage
-            localStorage.setItem('user_id', data.user.id);
-            localStorage.setItem('username', data.user.username);
-            localStorage.setItem('user_email', data.user.email);
-            localStorage.setItem('avatar', data.user.avatar || '');
+            // 保存用户信息到 sessionStorage（每标签页独立，支持多账号同时登录）
+            sessionStorage.setItem('user_id', data.user.id);
+            sessionStorage.setItem('username', data.user.username);
+            sessionStorage.setItem('user_email', data.user.email);
+            sessionStorage.setItem('avatar', data.user.avatar || '');
             document.cookie = 'username_display=' + encodeURIComponent(data.user.username) + ';path=/';
             setTimeout(() => { window.location.href = '/chat'; }, 800);
         } else {

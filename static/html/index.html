@@ -313,6 +313,55 @@
             .main { display: none; }
             .main.show { display: flex; }
         }
+
+        /* ── 右键菜单 ── */
+        .msg-context-menu {
+            display: none; position: fixed; z-index: 300;
+            background: white; border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            min-width: 120px; padding: 6px 0;
+        }
+        .msg-context-menu .menu-item {
+            padding: 8px 18px; font-size: 13px; color: #333;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .msg-context-menu .menu-item:hover { background: #f5f5ff; }
+        .msg-context-menu .menu-item.danger { color: #e53e3e; }
+        .msg-context-menu .menu-item.disabled { color: #ccc; pointer-events: none; }
+
+        /* ── 回复栏 ── */
+        .reply-bar {
+            display: none; align-items: center; gap: 10px;
+            padding: 8px 24px; background: #f8f8fb;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            font-size: 13px; color: #666;
+        }
+        .reply-bar .reply-preview {
+            flex: 1; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; color: #999;
+        }
+        .reply-bar .reply-cancel {
+            cursor: pointer; color: #bbb; font-size: 18px;
+            line-height: 1; padding: 0 4px;
+        }
+        .reply-bar .reply-cancel:hover { color: #e53e3e; }
+
+        /* ── 引用消息条 ── */
+        .msg-quote {
+            border-left: 3px solid #667eea;
+            padding: 4px 10px; margin-bottom: 6px;
+            font-size: 12px; color: #888; background: rgba(102,126,234,0.06);
+            border-radius: 4px; max-width: 100%;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .msg-row.mine .msg-quote {
+            border-left-color: rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.8);
+        }
+
+        /* ── 消息气泡 hover 显示操作提示 ── */
+        .msg-bubble { position: relative; cursor: default; }
     </style>
 </head>
 <body>
@@ -350,7 +399,7 @@
 
         <div class="list-area" id="listArea"></div>
 
-        <div class="sidebar-footer">MyChat v2 — 好友聊天</div>
+        <!-- sidebar-footer removed -->
     </aside>
 
     <!-- ════ 主区域 ════ -->
@@ -362,15 +411,25 @@
             <div class="placeholder">
                 <div class="icon">💬</div>
                 <div>选择左侧好友，开始私聊</div>
-                <div class="sub">Enter 发送 · Shift+Enter 换行</div>
             </div>
+        </div>
+        <div class="reply-bar" id="replyBar">
+            <span>💬 回复</span>
+            <span class="reply-preview" id="replyPreview"></span>
+            <span class="reply-cancel" onclick="cancelReply()">✕</span>
         </div>
         <div class="input-area">
             <div style="flex:1;display:flex;flex-direction:column;">
                 <textarea id="msgInput" rows="1" placeholder="选择好友后即可发送消息…" disabled></textarea>
-                <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>
             </div>
             <button class="send-btn" id="sendBtn" disabled onclick="sendMessage()">发 送</button>
+        </div>
+        <div class="msg-context-menu" id="msgContextMenu">
+            <div class="menu-item" id="ctxReply" onclick="ctxReplyMsg()">💬 回复</div>
+            <div class="menu-item danger" id="ctxRevoke" onclick="ctxRevokeMsg()">↩ 撤回</div>
+            <div class="menu-item danger" id="ctxDelete" onclick="ctxDeleteMsg()">🗑 删除</div>
+            <div class="menu-divider" id="ctxDivider" style="height:1px;background:#eee;margin:4px 0;"></div>
+            <div class="menu-item danger" id="ctxClear" onclick="ctxClearScreen()">🧹 清屏</div>
         </div>
     </main>
 </div>
@@ -409,14 +468,20 @@ let lastMsgId = 0;           // 已加载的最大消息 ID（增量轮询用）
 let unreadCounts = {};       // friend_id → 未读数
 let pollTimer = null;        // 消息轮询定时器
 let unreadTimer = null;      // 未读计数轮询定时器
+let replyTo = null;          // 当前回复目标 { id, senderName, preview }
+let deletedMsgs = new Set(); // 本地删除的消息 ID 集合
+let contextMsgId = null;     // 当前右键菜单操作的消息 ID
+let lastPollTime = null;     // 上次轮询时间（ISO 字符串）
+let pingTimer = null;        // 心跳保活定时器
 
 // ═══════════════════════════════════════
 // 初始化
 // ═══════════════════════════════════════
 (function init() {
-    userId    = localStorage.getItem('user_id') || '';
-    username  = localStorage.getItem('username') || 'Unknown';
-    userEmail = localStorage.getItem('user_email') || '';
+    // sessionStorage 每标签页独立，支持多账号同时在线
+    userId    = sessionStorage.getItem('user_id') || '';
+    username  = sessionStorage.getItem('username') || 'Unknown';
+    userEmail = sessionStorage.getItem('user_email') || '';
 
     if (!userId) {
         window.location.href = '/login';
@@ -437,6 +502,30 @@ let unreadTimer = null;      // 未读计数轮询定时器
     setInterval(loadFriends, 5000);
     setInterval(loadRequests, 10000);
     setInterval(loadUnreadCounts, 3000);
+
+    // 心跳保活：每 45 秒刷新在线状态
+    pingTimer = setInterval(sendPing, 45000);
+    sendPing();  // 立即发送一次
+
+    // 聊天区域右键 → 清屏
+    document.getElementById('messages').addEventListener('contextmenu', function(e) {
+        // 如果点在消息气泡上，由消息自己的 oncontextmenu 处理
+        if (e.target.closest('.msg-bubble')) return;
+        e.preventDefault();
+        showClearScreenMenu(e);
+    });
+
+    // 加载本地删除的消息 ID
+    try {
+        const saved = JSON.parse(localStorage.getItem('deleted_msgs') || '[]');
+        if (Array.isArray(saved)) deletedMsgs = new Set(saved);
+    } catch(e) {}
+
+    // 点击任意位置关闭右键菜单
+    document.addEventListener('click', () => {
+        document.getElementById('msgContextMenu').style.display = 'none';
+        contextMsgId = null;
+    });
 
     // 消息输入框键盘事件：Enter 发送，Shift+Enter 换行
     const msgInput = document.getElementById('msgInput');
@@ -754,6 +843,9 @@ function selectFriend(friendId, friendName, online) {
     selectedFriend = { id: friendId, name: friendName, online };
     messages = [];
     lastMsgId = 0;
+    replyTo = null;
+    lastPollTime = null;
+    cancelReply();
 
     document.getElementById('chatHeader').innerHTML =
         '<span>' + (online ? '🟢' : '⚪') + '</span> ' +
@@ -786,6 +878,9 @@ function clearSelection() {
     selectedFriend = null;
     messages = [];
     lastMsgId = 0;
+    replyTo = null;
+    lastPollTime = null;
+    cancelReply();
 
     document.getElementById('chatHeader').innerHTML =
         '<span>👋</span> 选择一个好友开始聊天';
@@ -793,7 +888,6 @@ function clearSelection() {
         '<div class="placeholder">' +
         '<div class="icon">💬</div>' +
         '<div>选择左侧好友，开始私聊</div>' +
-        '<div class="sub">Enter 发送 · Shift+Enter 换行</div>' +
         '</div>';
     document.getElementById('msgInput').disabled = true;
     document.getElementById('msgInput').placeholder = '选择好友后即可发送消息…';
@@ -815,6 +909,7 @@ async function loadConversation(friendId) {
             if (messages.length > 0) {
                 lastMsgId = messages[messages.length - 1].id;
             }
+            lastPollTime = new Date().toISOString();
             renderMessages();
         }
     } catch (e) { console.error('loadConversation:', e); }
@@ -824,24 +919,50 @@ async function pollMessages(friendId) {
     if (!selectedFriend || selectedFriend.id !== friendId) return;
 
     try {
-        const resp = await fetch('/api/messages/conversation?user_id=' + userId +
-            '&friend_id=' + friendId + '&after=' + lastMsgId);
+        let url = '/api/messages/conversation?user_id=' + userId +
+            '&friend_id=' + friendId + '&after=' + lastMsgId;
+        if (lastPollTime) {
+            url += '&since=' + encodeURIComponent(lastPollTime);
+        }
+        lastPollTime = new Date().toISOString();
+
+        const resp = await fetch(url);
         if (!resp.ok) return;
         const data = await resp.json();
-        if (data.success && data.messages && data.messages.length > 0) {
+        if (data.success) {
             // 追加新消息
-            const newMsgs = data.messages;
-            messages = messages.concat(newMsgs);
-            lastMsgId = newMsgs[newMsgs.length - 1].id;
+            if (data.messages && data.messages.length > 0) {
+                const newMsgs = data.messages;
+                messages = messages.concat(newMsgs);
+                lastMsgId = newMsgs[newMsgs.length - 1].id;
 
-            // 追加渲染（不整页刷新）
-            appendMessages(newMsgs);
+                // 追加渲染（不整页刷新）
+                appendMessages(newMsgs);
 
-            // 对方发来的消息 → 标记已读
-            const hasIncoming = newMsgs.some(m => String(m.from_user_id) !== userId);
-            if (hasIncoming) {
-                markAsRead(friendId);
-                loadUnreadCounts();
+                // 对方发来的消息 → 标记已读
+                const hasIncoming = newMsgs.some(m => String(m.from_user_id) !== userId);
+                if (hasIncoming) {
+                    markAsRead(friendId);
+                    loadUnreadCounts();
+                }
+            }
+
+            // 处理更新消息（撤回等）— 仅在有可见变化时重渲染
+            if (data.updates && data.updates.length > 0) {
+                let needRerender = false;
+                for (const upd of data.updates) {
+                    const idx = messages.findIndex(m => m.id === upd.id);
+                    if (idx >= 0) {
+                        // 仅在撤回状态变化时才需要重渲染
+                        if (!messages[idx].is_revoked && upd.is_revoked) {
+                            needRerender = true;
+                        }
+                        messages[idx] = Object.assign(messages[idx], upd);
+                    }
+                }
+                if (needRerender) {
+                    renderMessages();
+                }
             }
         }
     } catch (e) { /* silent */ }
@@ -900,10 +1021,20 @@ function appendMessages(newMsgs) {
 }
 
 function msgToHtml(m) {
+    // 过滤本地删除的消息
+    if (deletedMsgs.has(m.id)) return '';
+
     const isMine = String(m.from_user_id) === userId;
     const time = formatTime(m.created_at);
+    const msgId = m.id;
 
-    // 默认头像：首字母 + 渐变背景
+    // 撤回的消息显示为系统消息样式
+    if (m.is_revoked) {
+        const text = isMine ? '你撤回了一条消息' : '对方撤回了一条消息';
+        return '<div class="msg-system">' + text + ' <span style="font-size:10px;color:#ccc;">' + time + '</span></div>';
+    }
+
+    // 头像
     let avatarStyle, avatarText;
     if (isMine) {
         const av = getAvatarStyle(parseInt(userId), username, '');
@@ -919,18 +1050,27 @@ function msgToHtml(m) {
 
     const avatarHtml = '<div class="msg-avatar" style="' + avatarStyle + '">' + avatarText + '</div>';
 
+    // 引用预览
+    let quoteHtml = '';
+    if (m.reply_to_id && m.reply_preview) {
+        quoteHtml = '<div class="msg-quote">' + esc(m.reply_preview) + '</div>';
+    }
+
+    // 右键事件
+    const ctxHandler = 'oncontextmenu="showContextMenu(event,' + msgId + ',' + isMine + ',\'' + escAttr(m.created_at) + '\')"';
+
     if (isMine) {
-        return '<div class="msg-row mine">' +
+        return '<div class="msg-row mine" data-msg-id="' + msgId + '">' +
             avatarHtml +
             '<div class="msg-body">' +
-            '<div class="msg-bubble">' + esc(m.content) + '</div>' +
+            '<div class="msg-bubble" ' + ctxHandler + '>' + quoteHtml + esc(m.content) + '</div>' +
             '<div class="msg-time">' + time + '</div>' +
             '</div></div>';
     } else {
-        return '<div class="msg-row theirs">' +
+        return '<div class="msg-row theirs" data-msg-id="' + msgId + '">' +
             avatarHtml +
             '<div class="msg-body">' +
-            '<div class="msg-bubble">' + esc(m.content) + '</div>' +
+            '<div class="msg-bubble" ' + ctxHandler + '>' + quoteHtml + esc(m.content) + '</div>' +
             '<div class="msg-time">' + time + '</div>' +
             '</div></div>';
     }
@@ -941,6 +1081,158 @@ function scrollToBottom() {
     setTimeout(() => {
         container.scrollTop = container.scrollHeight;
     }, 50);
+}
+
+// ═══════════════════════════════════════
+// 右键菜单
+// ═══════════════════════════════════════
+
+function showContextMenu(e, msgId, isMine, createdAt) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    contextMsgId = msgId;
+    const menu = document.getElementById('msgContextMenu');
+
+    // 回复：总是显示
+    document.getElementById('ctxReply').style.display = '';
+    // 撤回：仅自己的消息，且 2 分钟内
+    const ctxRevoke = document.getElementById('ctxRevoke');
+    if (isMine && canRevoke(createdAt)) {
+        ctxRevoke.style.display = '';
+        ctxRevoke.classList.remove('disabled');
+    } else if (isMine) {
+        ctxRevoke.style.display = '';
+        ctxRevoke.classList.add('disabled');
+    } else {
+        ctxRevoke.style.display = 'none';
+    }
+    // 显示分隔线和清屏
+    document.getElementById('ctxDelete').style.display = '';
+    document.getElementById('ctxDivider').style.display = 'none';
+    document.getElementById('ctxClear').style.display = 'none';
+
+    // 定位菜单，防止超出视口
+    let left = e.clientX;
+    let top = e.clientY;
+    if (left + 130 > window.innerWidth) left = window.innerWidth - 140;
+    if (top + 120 > window.innerHeight) top = window.innerHeight - 130;
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.display = 'block';
+}
+
+function canRevoke(createdAt) {
+    try {
+        const d = new Date(createdAt.replace(' ', 'T') + (createdAt.indexOf('Z') < 0 ? 'Z' : ''));
+        if (isNaN(d.getTime())) return false;
+        const diffSec = (Date.now() - d.getTime()) / 1000;
+        return diffSec <= 120;
+    } catch(e) { return false; }
+}
+
+function ctxReplyMsg() {
+    const m = messages.find(x => x.id === contextMsgId);
+    if (!m) return;
+    const senderName = String(m.from_user_id) === userId ? username : (selectedFriend ? selectedFriend.name : '?');
+    const preview = (m.content || '').substring(0, 50);
+    replyTo = { id: contextMsgId, senderName: senderName, preview: preview };
+    document.getElementById('replyPreview').textContent = senderName + ': ' + preview;
+    document.getElementById('replyBar').style.display = 'flex';
+    document.getElementById('msgInput').focus();
+    document.getElementById('msgContextMenu').style.display = 'none';
+    contextMsgId = null;
+}
+
+function cancelReply() {
+    replyTo = null;
+    document.getElementById('replyBar').style.display = 'none';
+}
+
+function ctxRevokeMsg() {
+    document.getElementById('msgContextMenu').style.display = 'none';
+    if (!contextMsgId) return;
+    revokeMessage(contextMsgId);
+    contextMsgId = null;
+}
+
+function ctxDeleteMsg() {
+    document.getElementById('msgContextMenu').style.display = 'none';
+    if (!contextMsgId) return;
+    deletedMsgs.add(contextMsgId);
+    // 保存到 localStorage
+    try { localStorage.setItem('deleted_msgs', JSON.stringify([...deletedMsgs])); } catch(e) {}
+    contextMsgId = null;
+    renderMessages();
+}
+
+function ctxClearScreen() {
+    document.getElementById('msgContextMenu').style.display = 'none';
+    // 将当前所有消息标记为已删除
+    for (const m of messages) {
+        if (m.id) deletedMsgs.add(m.id);
+    }
+    try { localStorage.setItem('deleted_msgs', JSON.stringify([...deletedMsgs])); } catch(e) {}
+    contextMsgId = null;
+    renderMessages();
+}
+
+async function revokeMessage(msgId) {
+    try {
+        const resp = await fetch('/api/messages/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: parseInt(userId), msg_id: msgId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            // 更新本地消息状态
+            const m = messages.find(x => x.id === msgId);
+            if (m) m.is_revoked = true;
+            renderMessages();
+        } else {
+            showToast(data.message || '撤回失败', 'error');
+        }
+    } catch(e) { showToast('撤回失败: 网络错误', 'error'); }
+}
+
+// ═══════════════════════════════════════
+// 心跳保活
+// ═══════════════════════════════════════
+
+async function sendPing() {
+    if (!userId) return;
+    try {
+        await fetch('/api/ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: parseInt(userId) })
+        });
+    } catch(e) { /* silent */ }
+}
+
+// ═══════════════════════════════════════
+// 聊天区域右键清屏菜单
+// ═══════════════════════════════════════
+
+function showClearScreenMenu(e) {
+    const menu = document.getElementById('msgContextMenu');
+    // 隐藏其他菜单项，只显示清屏
+    document.getElementById('ctxReply').style.display = 'none';
+    document.getElementById('ctxRevoke').style.display = 'none';
+    document.getElementById('ctxDelete').style.display = 'none';
+    document.getElementById('ctxDivider').style.display = 'none';
+    document.getElementById('ctxClear').style.display = '';
+
+    let left = e.clientX;
+    let top = e.clientY;
+    if (left + 100 > window.innerWidth) left = window.innerWidth - 110;
+    if (top + 40 > window.innerHeight) top = window.innerHeight - 50;
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.display = 'block';
 }
 
 // ═══════════════════════════════════════
@@ -961,6 +1253,12 @@ async function sendMessage() {
     btn.disabled = true;
     btn.textContent = '...';
 
+    // 保存回复信息
+    const currentReply = replyTo;
+    if (replyTo) {
+        cancelReply();
+    }
+
     // 乐观插入（本地先显示）
     const tempMsg = {
         id: 0,
@@ -968,20 +1266,27 @@ async function sendMessage() {
         to_user_id: selectedFriend.id,
         content: text,
         is_read: false,
+        is_revoked: false,
+        reply_to_id: currentReply ? currentReply.id : 0,
+        reply_preview: currentReply ? (currentReply.senderName + ': ' + currentReply.preview) : '',
         created_at: new Date().toISOString()
     };
     messages.push(tempMsg);
     appendMessages([tempMsg]);
 
     try {
+        const body = {
+            from_id: parseInt(userId),
+            to_id: selectedFriend.id,
+            content: text
+        };
+        if (currentReply) {
+            body.reply_to_id = currentReply.id;
+        }
         const resp = await fetch('/api/messages/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                from_id: parseInt(userId),
-                to_id: selectedFriend.id,
-                content: text
-            })
+            body: JSON.stringify(body)
         });
         const data = await resp.json();
         if (!data.success) {
@@ -1006,10 +1311,33 @@ async function sendMessage() {
 // ═══════════════════════════════════════
 function doLogout() {
     stopPolling();
-    localStorage.clear();
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    // 通知服务端清除在线状态（keepalive 确保页面跳转后请求仍完成）
+    if (userId) {
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: parseInt(userId) }),
+            keepalive: true
+        });
+    }
+    sessionStorage.clear();
     document.cookie = 'token=;path=/;max-age=0';
-    window.location.href = '/login';
+    // 短暂延迟确保 fetch 已发出
+    setTimeout(() => { window.location.href = '/login'; }, 150);
 }
+
+// 关闭标签页时也发送离线通知
+window.addEventListener('beforeunload', function() {
+    if (userId) {
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: parseInt(userId) }),
+            keepalive: true
+        });
+    }
+});
 
 // ═══════════════════════════════════════
 // 工具函数
