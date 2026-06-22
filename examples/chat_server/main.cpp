@@ -58,10 +58,10 @@ static std::string FindStaticDir()
         "../static",
     };
     for (const char* path : kPaths) {
-        std::ifstream f(std::string(path) + "/html/index.html");
+        std::ifstream f(std::string(path) + "/html/login.html");
         if (f.good()) return path;
     }
-    // fallback: 使用 examples/http/static（源码目录结构）
+    // fallback
     return "";
 }
 
@@ -186,21 +186,23 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
     std::string index_path    = static_dir + "/html/index.html";
     std::string login_path    = static_dir + "/html/login.html";
     std::string register_path = static_dir + "/html/register.html";
+        std::string notfound_path = static_dir + "/html/404.html";
 
     httplib::Server http;
 
     // ---- 静态文件挂载 ----
     http.set_mount_point("/static", static_dir);
 
-    // ---- 首页 ----
-    http.Get("/", [index_path](const httplib::Request& req, httplib::Response& res) {
-        std::ifstream f(index_path);
+    // ---- 首页（登录页） ----
+    http.Get("/", [login_path](const httplib::Request&, httplib::Response& res) {
+        std::ifstream f(login_path);
         if (f.good()) {
             std::string content((std::istreambuf_iterator<char>(f)),
                                  std::istreambuf_iterator<char>());
             res.set_content(content, "text/html; charset=utf-8");
         } else {
             res.status = 404;
+            res.set_content("login.html not found", "text/plain");
         }
     });
 
@@ -230,9 +232,35 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         }
     });
 
+
+    // ---- 聊天室页面（登录后访问） ----
+    http.Get("/chat", [index_path](const httplib::Request&, httplib::Response& res) {
+        std::ifstream f(index_path);
+        if (f.good()) {
+            std::string content((std::istreambuf_iterator<char>(f)),
+                                 std::istreambuf_iterator<char>());
+            res.set_content(content, "text/html; charset=utf-8");
+        } else {
+            res.status = 404;
+            res.set_content("chat.html not found", "text/plain");
+        }
+    });
+
     // ---- 健康检查 ----
     http.Get("/health", [](const httplib::Request&, httplib::Response& res) {
         res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    // ---- 404 页面（兜底路由，必须放在所有精确路由之后） ----
+    http.set_error_handler([notfound_path](const httplib::Request&, httplib::Response& res) {
+        if (res.status == 404) {
+            std::ifstream f(notfound_path);
+            if (f.good()) {
+                std::string content((std::istreambuf_iterator<char>(f)),
+                                     std::istreambuf_iterator<char>());
+                res.set_content(content, "text/html; charset=utf-8");
+            }
+        }
     });
 
     // ============================================================
@@ -491,7 +519,7 @@ static void TestHttpEndpoints()
 
     // ---- 静态页面 ----
     auto res1 = cli.Get("/");
-    check("GET / (index.html)", res1 && res1->status == 200,
+    check("GET / (login page)", res1 && res1->status == 200,
           res1 ? "HTTP " + std::to_string(res1->status) : "no response");
 
     auto res2 = cli.Get("/login");
@@ -502,9 +530,19 @@ static void TestHttpEndpoints()
     check("GET /register", res3 && res3->status == 200,
           res3 ? "HTTP " + std::to_string(res3->status) : "no response");
 
+    auto res_chat = cli.Get("/chat");
+    check("GET /chat (chat room)", res_chat && res_chat->status == 200,
+          res_chat ? "HTTP " + std::to_string(res_chat->status) : "no response");
+
     auto res4 = cli.Get("/health");
     check("GET /health", res4 && res4->status == 200,
           res4 ? "HTTP " + std::to_string(res4->status) : "no response");
+
+    // 不存在的路径应返回 404，且 body 包含 404.html 内容
+    auto res_404 = cli.Get("/no/such/path");
+    check("GET /no/such/path (404 page)",
+          res_404 && res_404->status == 404,
+          res_404 ? "HTTP " + std::to_string(res_404->status) + " (" + std::to_string(res_404->body.size()) + " bytes)" : "no response");
 
     // ---- REST API ----
 
