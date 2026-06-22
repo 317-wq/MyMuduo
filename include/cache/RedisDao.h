@@ -20,6 +20,7 @@ extern "C" {
 }
 
 #include <string>
+#include <vector>
 #include <cstdint>
 
 class RedisDao {
@@ -83,6 +84,41 @@ public:
 
     // 设置用户离线
     static bool SetUserOffline(redisContext* ctx, uint32_t user_id);
+
+    // ============================================================
+    // 好友列表缓存（Set）
+    // ============================================================
+
+    // Set: friend:list:<user_id> → {friend_id, friend_id, ...}
+    // 获取好友 ID 集合
+    static bool GetFriendIdSet(redisContext* ctx, uint32_t user_id,
+                               std::vector<uint32_t>& out_friend_ids);
+
+    // 缓存好友 ID 集合（批量 SADD + EXPIRE）
+    static bool CacheFriendIdSet(redisContext* ctx, uint32_t user_id,
+                                 const std::vector<uint32_t>& friend_ids, int ttl_seconds);
+
+    // 添加一个好友到集合
+    static bool AddFriendToSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
+
+    // 从集合移除一个好友
+    static bool RemoveFriendFromSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
+
+    // 判断是否为好友（集合中存在）
+    static bool IsInFriendSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
+
+    // ============================================================
+    // 搜索历史（List，最近 6 条）
+    // ============================================================
+
+    // List: search:history:<user_id>
+    // 添加一条搜索记录（LPUSH + LTRIM 保留最近 6 条）
+    static bool AddSearchHistory(redisContext* ctx, uint32_t user_id,
+                                 const std::string& keyword);
+
+    // 获取搜索历史（LRANGE 0 5）
+    static bool GetSearchHistory(redisContext* ctx, uint32_t user_id,
+                                 std::vector<std::string>& out);
 
 private:
     // 工具：构造带前缀的 key
