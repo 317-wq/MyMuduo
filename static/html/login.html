@@ -174,8 +174,13 @@ async function doLogin() {
         const data = await res.json();
         if (data.success) {
             showMsg('登录成功！即将跳转...', 'success');
+            // 保存用户信息到 localStorage
+            localStorage.setItem('user_id', data.user.id);
+            localStorage.setItem('username', data.user.username);
+            localStorage.setItem('user_email', data.user.email);
+            localStorage.setItem('avatar', data.user.avatar || '');
             document.cookie = 'username_display=' + encodeURIComponent(data.user.username) + ';path=/';
-            setTimeout(() => { window.location.href = '/chat?user=' + encodeURIComponent(data.user.username); }, 1000);
+            setTimeout(() => { window.location.href = '/chat'; }, 800);
         } else {
             showMsg(data.message || '登录失败', 'error');
             btn.disabled = false;

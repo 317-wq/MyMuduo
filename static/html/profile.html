@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChat - 个人档案</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh; background: #f0f2f5;
+            display: flex; justify-content: center; padding: 40px 16px;
+        }
+        .container { width: 100%; max-width: 560px; }
+
+        /* 顶部栏 */
+        .topbar {
+            display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 10px; border: none;
+            background: white; color: #555; font-size: 18px; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s;
+        }
+        .back-btn:hover { transform: translateY(-1px); }
+        .topbar h1 { font-size: 20px; color: #333; }
+
+        /* 卡片 */
+        .card {
+            background: white; border-radius: 16px; padding: 28px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.06); margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 15px; font-weight: 600; color: #333;
+            margin-bottom: 20px; padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        /* 头像区域 */
+        .avatar-section {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 12px; margin-bottom: 4px;
+        }
+        .avatar-circle {
+            width: 100px; height: 100px; border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; font-size: 38px; font-weight: 600;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; overflow: hidden;
+            background-size: cover; background-position: center;
+            border: 3px solid #e8e8ff; transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .avatar-circle:hover { transform: scale(1.05); }
+
+        /* 表单 */
+        .form-row {
+            display: flex; align-items: center; padding: 14px 0;
+            border-bottom: 1px solid #f7f7f7;
+        }
+        .form-row:last-child { border-bottom: none; }
+        .form-label {
+            width: 90px; font-size: 13px; color: #888; flex-shrink: 0;
+        }
+        .form-value {
+            flex: 1; font-size: 14px; color: #333;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .form-value input, .form-value select {
+            flex: 1; padding: 6px 10px; border: 1px solid #e0e0e0;
+            border-radius: 6px; font-size: 14px; outline: none;
+            font-family: inherit;
+        }
+        .form-value input:focus, .form-value select:focus { border-color: #667eea; }
+        .edit-icon {
+            font-size: 12px; color: #bbb; cursor: pointer;
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .edit-icon:hover { color: #667eea; background: #f5f5ff; }
+        .save-btn-row { margin-top: 16px; text-align: right; }
+        .btn-primary {
+            padding: 9px 24px; border: none; border-radius: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-primary:hover { transform: translateY(-1px); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+        /* Zodiac */
+        .zodiac-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 12px;
+            font-size: 12px; background: #f5f5ff; color: #667eea;
+            flex-shrink: 0; white-space: nowrap;
+        }
+
+        /* ═══════════════════════════════════════ */
+        /* 自定义日历 */
+        /* ═══════════════════════════════════════ */
+        .birthday-display {
+            width: 150px; padding: 6px 10px; border: 1px solid #e0e0e0;
+            border-radius: 6px; font-size: 14px; outline: none;
+            font-family: inherit; cursor: pointer; background: white;
+            color: #333; text-align: left; flex-shrink: 0;
+        }
+        .birthday-display:focus { border-color: #667eea; }
+        .birthday-display.placeholder { color: #aaa; }
+
+        .calendar-popup {
+            display: none; position: absolute; z-index: 50;
+            background: white; border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            padding: 12px; width: 280px;
+            user-select: none; -webkit-user-select: none;
+        }
+        .calendar-popup.show { display: block; }
+
+        .cal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 8px; gap: 4px;
+        }
+        .cal-nav {
+            width: 28px; height: 28px; border: none; border-radius: 6px;
+            background: #f5f5f5; cursor: pointer; font-size: 14px; color: #555;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .cal-nav:hover { background: #e8e8ff; }
+        .cal-nav:active { background: #d0d0f0; }
+        .cal-month-year {
+            flex: 1; text-align: center; font-size: 14px; font-weight: 600; color: #333;
+        }
+        .cal-month-year select {
+            border: none; background: transparent; font-size: 14px;
+            font-weight: 600; color: #333; cursor: pointer; outline: none;
+            font-family: inherit; padding: 2px;
+        }
+        .cal-month-year select:hover { color: #667eea; }
+
+        .cal-weekdays {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            text-align: center; font-size: 11px; color: #aaa;
+            padding: 4px 0 6px; border-bottom: 1px solid #f0f0f0;
+            margin-bottom: 4px;
+        }
+        .cal-days {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            text-align: center; gap: 2px;
+        }
+        .cal-day {
+            width: 32px; height: 32px; line-height: 32px;
+            border-radius: 50%; cursor: pointer; font-size: 13px; color: #333;
+            transition: all 0.15s; margin: 0 auto;
+        }
+        .cal-day:hover { background: #f0f0ff; }
+        .cal-day.other-month { color: #ccc; cursor: default; }
+        .cal-day.other-month:hover { background: transparent; }
+        .cal-day.today { font-weight: 700; color: #667eea; }
+        .cal-day.selected { background: #667eea; color: white; }
+        .cal-day.selected.today { background: #667eea; color: white; }
+        .cal-footer {
+            display: flex; justify-content: space-between; margin-top: 8px;
+        }
+        .cal-footer button {
+            padding: 4px 14px; border: 1px solid #e0e0e0; border-radius: 6px;
+            background: white; cursor: pointer; font-size: 12px; color: #666;
+            transition: all 0.2s;
+        }
+        .cal-footer button:hover { background: #f5f5f5; }
+        .cal-footer .cal-today-btn { color: #667eea; border-color: #d0d0f0; }
+        .cal-footer .cal-clear-btn { color: #e53e3e; border-color: #fed7d7; }
+
+        .birthday-wrap { position: relative; }
+
+        /* 危险区域 */
+        .danger-zone { margin-top: 8px; }
+        .danger-desc {
+            font-size: 13px; color: #999; line-height: 1.6; margin-bottom: 16px;
+        }
+        .danger-desc strong { color: #e53e3e; }
+        .btn-delete {
+            padding: 10px 28px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.3s;
+            background: #e53e3e; color: white;
+        }
+        .btn-delete:hover { background: #c53030; transform: translateY(-1px); }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); z-index: 100;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: white; border-radius: 16px; width: 90%; max-width: 420px;
+            padding: 24px; display: flex; flex-direction: column; gap: 16px;
+        }
+        .modal-box h3 { font-size: 16px; color: #333; text-align: center; }
+        .modal-btns {
+            display: flex; gap: 10px; justify-content: center;
+        }
+        .btn-cancel {
+            padding: 8px 22px; border: 1px solid #e0e0e0;
+            border-radius: 8px; background: white; color: #666;
+            font-size: 14px; cursor: pointer;
+        }
+        .btn-confirm {
+            padding: 8px 22px; border: none; border-radius: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+
+        /* 销毁账号弹窗 */
+        .delete-modal-text {
+            font-size: 14px; color: #555; line-height: 1.8; text-align: center;
+            padding: 8px 0;
+        }
+        .delete-modal-text strong { color: #e53e3e; }
+        .btn-delete-confirm {
+            padding: 12px 28px; border: none; border-radius: 10px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; width: 100%;
+        }
+        .btn-delete-confirm.locked {
+            background: #e0e0e0; color: #999; cursor: not-allowed;
+        }
+        .btn-delete-confirm.ready {
+            background: #e53e3e; color: white; cursor: pointer;
+        }
+        .btn-delete-confirm.ready:hover { background: #c53030; transform: translateY(-1px); }
+        .delete-countdown {
+            font-size: 13px; color: #999; text-align: center;
+        }
+        .delete-countdown strong { color: #e53e3e; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            padding: 10px 24px; border-radius: 8px; font-size: 13px; z-index: 200;
+            animation: fadeIn 0.3s; pointer-events: none; display: none;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%,-6px); } to { opacity: 1; transform: translate(-50%,0); } }
+        .toast.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
+        .toast.info  { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+        .toast.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <button class="back-btn" onclick="window.location.href='/chat'">←</button>
+        <h1>个人档案</h1>
+    </div>
+
+    <!-- 头像卡片 -->
+    <div class="card">
+        <div class="avatar-section">
+            <div class="avatar-circle" id="avatarCircle">
+                <span id="avatarText">?</span>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#333;" id="displayName">---</div>
+        </div>
+    </div>
+
+    <!-- 详细信息卡片 -->
+    <div class="card">
+        <div class="card-title">个人信息</div>
+
+        <div class="form-row">
+            <span class="form-label">昵称</span>
+            <span class="form-value">
+                <input type="text" id="editUsername" maxlength="20" placeholder="设置昵称" />
+            </span>
+        </div>
+        <div class="form-row">
+            <span class="form-label">性别</span>
+            <span class="form-value">
+                <select id="editGender">
+                    <option value="0">未设置</option>
+                    <option value="1">男</option>
+                    <option value="2">女</option>
+                </select>
+            </span>
+        </div>
+        <div class="form-row">
+            <span class="form-label">生日</span>
+            <span class="form-value">
+                <div class="birthday-wrap">
+                    <button class="birthday-display" id="birthdayDisplay" onclick="toggleCalendar(event)" type="button">请选择生日</button>
+                    <input type="hidden" id="editBirthday" />
+                    <div class="calendar-popup" id="calendarPopup">
+                        <div class="cal-header">
+                            <button class="cal-nav" onclick="calChangeMonth(-1, event)" title="上个月">◀</button>
+                            <div class="cal-month-year">
+                                <select id="calMonth" onchange="calRender()"></select>
+                                <select id="calYear" onchange="calRender()"></select>
+                            </div>
+                            <button class="cal-nav" onclick="calChangeMonth(1, event)" title="下个月">▶</button>
+                        </div>
+                        <div class="cal-weekdays">
+                            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                        </div>
+                        <div class="cal-days" id="calDays"></div>
+                        <div class="cal-footer">
+                            <button class="cal-clear-btn" onclick="calClear(event)">清除</button>
+                            <button class="cal-today-btn" onclick="calGoToday(event)">今天</button>
+                        </div>
+                    </div>
+                </div>
+                <span id="zodiacDisplay" class="zodiac-badge" style="display:none"></span>
+            </span>
+        </div>
+        <div class="form-row">
+            <span class="form-label">邮箱</span>
+            <span class="form-value" style="color:#888;" id="displayEmail">---</span>
+        </div>
+        <div class="form-row">
+            <span class="form-label">备用邮箱</span>
+            <span class="form-value">
+                <input type="email" id="editSecEmail" placeholder="选填" />
+            </span>
+        </div>
+        <div class="form-row">
+            <span class="form-label">注册时间</span>
+            <span class="form-value" style="color:#888;" id="displayCreated">---</span>
+        </div>
+
+        <div class="save-btn-row">
+            <button class="btn-primary" id="saveBtn" onclick="saveProfile()">保存修改</button>
+        </div>
+    </div>
+
+    <!-- 危险区域 -->
+    <div class="card danger-zone">
+        <div class="card-title" style="color:#e53e3e;">账号销毁</div>
+        <button class="btn-delete" id="deleteBtn" onclick="openDeleteModal()">
+            销毁账号
+        </button>
+    </div>
+</div>
+
+<!-- 销毁账号确认弹窗 -->
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
+    <div class="modal-box">
+        <h3 style="color:#e53e3e;">⚠ 销毁账号</h3>
+        <div class="delete-modal-text">
+            销毁账号后，<strong>所有数据将被永久删除</strong>，包括：<br>
+            好友关系、聊天记录、个人资料。<br><br>
+            此操作<strong>不可撤销</strong>，请确认是否继续。
+        </div>
+        <button class="btn-delete-confirm locked" id="deleteConfirmBtn" disabled>
+            请等待 10 秒
+        </button>
+        <div class="delete-countdown" id="deleteCountdownText">
+            为保障安全，请等待 <strong id="deleteCountdownNum">10</strong> 秒后可确认
+        </div>
+        <div class="modal-btns" style="margin-top:4px;">
+            <button class="btn-cancel" onclick="closeDeleteModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const userId   = localStorage.getItem('user_id') || '';
+const username = localStorage.getItem('username') || '';
+
+if (!userId) { window.location.href = '/login'; }
+
+let profile = {};
+let deleteTimer = null;
+let deleteCountdown = 10;
+
+// ═══════════════════════════════════════
+// 初始化
+// ═══════════════════════════════════════
+(async function init() {
+    document.getElementById('displayName').textContent = username;
+    await loadProfile();
+})();
+
+async function loadProfile() {
+    try {
+        const resp = await fetch('/api/user/profile?user_id=' + userId);
+        const data = await resp.json();
+        if (data.success) {
+            profile = data;
+            renderProfile();
+        }
+    } catch (e) { showToast('加载档案失败', 'error'); }
+}
+
+function renderProfile() {
+    // 默认头像：首字母 + 渐变背景
+    const circle = document.getElementById('avatarCircle');
+    const textEl = document.getElementById('avatarText');
+    circle.style.backgroundImage = '';
+    circle.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+    textEl.style.display = '';
+    textEl.textContent = (profile.username || username).charAt(0).toUpperCase();
+
+    document.getElementById('displayName').textContent = profile.username || username;
+    document.getElementById('editUsername').value = profile.username || '';
+    document.getElementById('editGender').value = profile.gender || 0;
+
+    // 生日显示
+    const bday = profile.birthday || '';
+    document.getElementById('editBirthday').value = bday;
+    updateBirthdayDisplay(bday);
+
+    document.getElementById('editSecEmail').value = profile.secondary_email || '';
+    document.getElementById('displayEmail').textContent = profile.email || '';
+    document.getElementById('displayCreated').textContent =
+        formatDate(profile.created_at);
+    updateZodiac(bday);
+}
+
+// ═══════════════════════════════════════
+// 自定义日历
+// ═══════════════════════════════════════
+let calYear, calMonth, calSelected;
+
+function initCalendar() {
+    const now = new Date();
+    calYear = now.getFullYear();
+    calMonth = now.getMonth() + 1; // 1-12
+    calSelected = null;
+
+    // 从已有生日初始化
+    const bday = document.getElementById('editBirthday').value;
+    if (bday) {
+        const parts = bday.split('-');
+        calYear = parseInt(parts[0]);
+        calMonth = parseInt(parts[1]);
+        calSelected = { y: calYear, m: calMonth, d: parseInt(parts[2]) };
+    }
+
+    // 填充年份选择器
+    const yearSel = document.getElementById('calYear');
+    yearSel.innerHTML = '';
+    const thisYear = new Date().getFullYear();
+    for (let y = thisYear; y >= 1920; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + '年';
+        if (y === calYear) opt.selected = true;
+        yearSel.appendChild(opt);
+    }
+
+    // 填充月份选择器
+    const monthSel = document.getElementById('calMonth');
+    monthSel.innerHTML = '';
+    for (let m = 1; m <= 12; m++) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m + '月';
+        if (m === calMonth) opt.selected = true;
+        monthSel.appendChild(opt);
+    }
+
+    calRender();
+}
+
+function calRender() {
+    calYear = parseInt(document.getElementById('calYear').value);
+    calMonth = parseInt(document.getElementById('calMonth').value);
+
+    const daysContainer = document.getElementById('calDays');
+    const firstDay = new Date(calYear, calMonth - 1, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+    const daysInPrevMonth = new Date(calYear, calMonth - 1, 0).getDate();
+
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' +
+        String(today.getMonth() + 1).padStart(2, '0') + '-' +
+        String(today.getDate()).padStart(2, '0');
+
+    let html = '';
+
+    // 上个月末尾的几天
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const d = daysInPrevMonth - i;
+        html += '<div class="cal-day other-month">' + d + '</div>';
+    }
+
+    // 本月
+    for (let d = 1; d <= daysInMonth; d++) {
+        let cls = 'cal-day';
+        const dateStr = calYear + '-' +
+            String(calMonth).padStart(2, '0') + '-' +
+            String(d).padStart(2, '0');
+
+        if (dateStr === todayStr) cls += ' today';
+        if (calSelected && calSelected.y === calYear &&
+            calSelected.m === calMonth && calSelected.d === d) {
+            cls += ' selected';
+        }
+        html += '<div class="' + cls + '" onclick="calPickDay(' + d + ', event)">' + d + '</div>';
+    }
+
+    // 下个月开头的几天
+    const totalCells = firstDay + daysInMonth;
+    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let d = 1; d <= remaining; d++) {
+        html += '<div class="cal-day other-month">' + d + '</div>';
+    }
+
+    daysContainer.innerHTML = html;
+}
+
+function calPickDay(d, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    calSelected = { y: calYear, m: calMonth, d: d };
+    const dateStr = calYear + '-' +
+        String(calMonth).padStart(2, '0') + '-' +
+        String(d).padStart(2, '0');
+    document.getElementById('editBirthday').value = dateStr;
+    updateBirthdayDisplay(dateStr);
+    updateZodiac(dateStr);
+    calRender();
+    closeCalendar();
+}
+
+function calChangeMonth(delta, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    let m = calMonth + delta;
+    let y = calYear;
+    if (m < 1) { m = 12; y--; }
+    if (m > 12) { m = 1; y++; }
+    calYear = y;
+    calMonth = m;
+    document.getElementById('calYear').value = y;
+    document.getElementById('calMonth').value = m;
+    calRender();
+}
+
+function calGoToday(ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    const today = new Date();
+    calYear = today.getFullYear();
+    calMonth = today.getMonth() + 1;
+    document.getElementById('calYear').value = calYear;
+    document.getElementById('calMonth').value = calMonth;
+    calPickDay(today.getDate());
+}
+
+function calClear(ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    calSelected = null;
+    document.getElementById('editBirthday').value = '';
+    updateBirthdayDisplay('');
+    updateZodiac('');
+    calRender();
+    closeCalendar();
+}
+
+function toggleCalendar(ev) {
+    ev.stopPropagation();
+    const popup = document.getElementById('calendarPopup');
+    if (popup.classList.contains('show')) {
+        closeCalendar();
+    } else {
+        initCalendar();
+        popup.classList.add('show');
+    }
+}
+
+function closeCalendar() {
+    document.getElementById('calendarPopup').classList.remove('show');
+}
+
+function updateBirthdayDisplay(dateStr) {
+    const display = document.getElementById('birthdayDisplay');
+    if (dateStr) {
+        display.textContent = dateStr;
+        display.classList.remove('placeholder');
+    } else {
+        display.textContent = '请选择生日';
+        display.classList.add('placeholder');
+    }
+}
+
+// 鼠标滚轮处理：滚轮切换月份
+document.addEventListener('wheel', function(e) {
+    const popup = document.getElementById('calendarPopup');
+    if (!popup.classList.contains('show')) return;
+    // 检查滚轮事件是否发生在日历弹窗内
+    if (!popup.contains(e.target)) return;
+
+    e.preventDefault();
+    if (e.deltaY < 0) {
+        calChangeMonth(-1);
+    } else if (e.deltaY > 0) {
+        calChangeMonth(1);
+    }
+}, { passive: false });
+
+// 点击日历外部关闭
+document.addEventListener('click', function(e) {
+    const popup = document.getElementById('calendarPopup');
+    const display = document.getElementById('birthdayDisplay');
+    if (popup.classList.contains('show') &&
+        !popup.contains(e.target) &&
+        e.target !== display) {
+        closeCalendar();
+    }
+});
+
+// ═══════════════════════════════════════
+// 生日 → 星座
+// ═══════════════════════════════════════
+
+function updateZodiac(bday) {
+    const el = document.getElementById('zodiacDisplay');
+    if (!bday) { el.style.display = 'none'; return; }
+
+    const parts = bday.split('-');
+    const month = parseInt(parts[1]);
+    const day = parseInt(parts[2]);
+    const zodiac = getZodiac(month, day);
+
+    el.style.display = 'inline-block';
+    el.textContent = zodiac.emoji + ' ' + zodiac.name;
+}
+
+function getZodiac(month, day) {
+    const signs = [
+        { name: '摩羯座', emoji: '♑', m1:12,d1:22, m2:1, d2:19 },
+        { name: '水瓶座', emoji: '♒', m1:1, d1:20, m2:2, d2:18 },
+        { name: '双鱼座', emoji: '♓', m1:2, d1:19, m2:3, d2:20 },
+        { name: '白羊座', emoji: '♈', m1:3, d1:21, m2:4, d2:19 },
+        { name: '金牛座', emoji: '♉', m1:4, d1:20, m2:5, d2:20 },
+        { name: '双子座', emoji: '♊', m1:5, d1:21, m2:6, d2:21 },
+        { name: '巨蟹座', emoji: '♋', m1:6, d1:22, m2:7, d2:22 },
+        { name: '狮子座', emoji: '♌', m1:7, d1:23, m2:8, d2:22 },
+        { name: '处女座', emoji: '♍', m1:8, d1:23, m2:9, d2:22 },
+        { name: '天秤座', emoji: '♎', m1:9, d1:23, m2:10, d2:23 },
+        { name: '天蝎座', emoji: '♏', m1:10,d1:24, m2:11,d2:22 },
+        { name: '射手座', emoji: '♐', m1:11,d1:23, m2:12,d2:21 },
+    ];
+    for (const s of signs) {
+        if ((month === s.m1 && day >= s.d1) || (month === s.m2 && day <= s.d2)) {
+            return s;
+        }
+    }
+    return signs[0];
+}
+
+// ═══════════════════════════════════════
+// 保存资料
+// ═══════════════════════════════════════
+async function saveProfile() {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.textContent = '保存中...';
+
+    const body = {
+        user_id: parseInt(userId),
+        username: document.getElementById('editUsername').value.trim(),
+        gender: parseInt(document.getElementById('editGender').value),
+        birthday: document.getElementById('editBirthday').value,
+        secondary_email: document.getElementById('editSecEmail').value.trim()
+    };
+
+    try {
+        const resp = await fetch('/api/user/profile/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) {
+            if (body.username) localStorage.setItem('username', body.username);
+            await loadProfile();
+        }
+    } catch (e) { showToast('保存失败', 'error'); }
+
+    btn.disabled = false; btn.textContent = '保存修改';
+}
+
+// ═══════════════════════════════════════
+// 账号销毁弹窗
+// ═══════════════════════════════════════
+function openDeleteModal() {
+    // 重置状态
+    deleteCountdown = 10;
+    const confirmBtn = document.getElementById('deleteConfirmBtn');
+    const countdownText = document.getElementById('deleteCountdownText');
+    const countdownNum = document.getElementById('deleteCountdownNum');
+
+    confirmBtn.classList.remove('ready');
+    confirmBtn.classList.add('locked');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '请等待 10 秒';
+    countdownNum.textContent = '10';
+    countdownText.innerHTML = '为保障安全，请等待 <strong id="deleteCountdownNum">10</strong> 秒后可确认';
+
+    document.getElementById('deleteModal').classList.add('show');
+
+    // 启动倒计时
+    if (deleteTimer) clearInterval(deleteTimer);
+    deleteTimer = setInterval(() => {
+        deleteCountdown--;
+        document.getElementById('deleteCountdownNum').textContent = deleteCountdown;
+        document.getElementById('deleteConfirmBtn').textContent = '请等待 ' + deleteCountdown + ' 秒';
+
+        if (deleteCountdown <= 0) {
+            clearInterval(deleteTimer);
+            deleteTimer = null;
+            confirmBtn.classList.remove('locked');
+            confirmBtn.classList.add('ready');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '确认销毁账号';
+            document.getElementById('deleteCountdownText').innerHTML =
+                '<strong style="color:#e53e3e;">⚠ 现在点击上方按钮将永久销毁账号！</strong>';
+        }
+    }, 1000);
+
+    // 绑定确认按钮点击
+    confirmBtn.onclick = executeDeleteAccount;
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('show');
+    if (deleteTimer) {
+        clearInterval(deleteTimer);
+        deleteTimer = null;
+    }
+}
+
+async function executeDeleteAccount() {
+    const btn = document.getElementById('deleteConfirmBtn');
+    if (!btn.classList.contains('ready')) return;
+
+    btn.disabled = true;
+    btn.textContent = '销毁中...';
+
+    try {
+        const resp = await fetch('/api/user/account/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: parseInt(userId) })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeDeleteModal();
+            showToast('账号已销毁，即将跳转...', 'success');
+            localStorage.clear();
+            setTimeout(() => { window.location.href = '/login'; }, 1500);
+        } else {
+            showToast(data.message || '销毁失败', 'error');
+            btn.disabled = false;
+            btn.textContent = '确认销毁账号';
+        }
+    } catch (e) {
+        showToast('操作失败：网络错误', 'error');
+        btn.disabled = false;
+        btn.textContent = '确认销毁账号';
+    }
+}
+
+// ═══════════════════════════════════════
+// 工具
+// ═══════════════════════════════════════
+function formatDate(ts) {
+    if (!ts) return '---';
+    try {
+        const d = new Date(ts.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return ts;
+        return d.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' });
+    } catch (e) { return ts; }
+}
+
+let toastTimer;
+function showToast(text, cls) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.className = 'toast ' + (cls || 'info');
+    el.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+</script>
+</body>
+</html>
