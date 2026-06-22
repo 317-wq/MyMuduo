@@ -569,6 +569,129 @@ TEST(DispatcherTest, OverwriteHandler) {
 }
 
 // ============================================================
+// 好友相关消息测试
+// ============================================================
+
+TEST(FriendMessageTest, SearchUserRequest) {
+    SearchUserRequest msg;
+    msg.keyword = "alice@example.com";
+
+    std::string json_str = msg.ToJsonString();
+    EXPECT_NE(json_str.find("alice@example.com"), std::string::npos);
+
+    SearchUserRequest restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.keyword, "alice@example.com");
+}
+
+TEST(FriendMessageTest, SearchUserRequestEmptyKeyword) {
+    std::string json = R"({"type":"search_user_request","keyword":""})";
+    SearchUserRequest msg;
+    EXPECT_FALSE(msg.FromJsonString(json));  // 空 keyword 无效
+}
+
+TEST(FriendMessageTest, SearchUserResponse) {
+    SearchUserResponse msg;
+    msg.success = true;
+    SearchUserResponse::UserItem u1, u2;
+    u1.id = 10; u1.email = "a@t.com"; u1.username = "Alice"; u1.avatar = "/a.png";
+    u2.id = 20; u2.email = "b@t.com"; u2.username = "Bob"; u2.avatar = "/b.png";
+    msg.users.push_back(u1);
+    msg.users.push_back(u2);
+
+    std::string json_str = msg.ToJsonString();
+    SearchUserResponse restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_TRUE(restored.success);
+    ASSERT_EQ(restored.users.size(), 2u);
+    EXPECT_EQ(restored.users[0].username, "Alice");
+    EXPECT_EQ(restored.users[1].username, "Bob");
+}
+
+TEST(FriendMessageTest, AddFriendRequest) {
+    AddFriendRequest msg;
+    msg.to_user_id = 42;
+
+    std::string json_str = msg.ToJsonString();
+    AddFriendRequest restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.to_user_id, 42u);
+}
+
+TEST(FriendMessageTest, AcceptFriendRequest) {
+    AcceptFriendRequest msg;
+    msg.request_id = 77;
+
+    std::string json_str = msg.ToJsonString();
+    AcceptFriendRequest restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.request_id, 77u);
+}
+
+TEST(FriendMessageTest, AcceptFriendResponse) {
+    AcceptFriendResponse msg;
+    msg.success = true;
+    msg.friend_id = 99;
+    msg.friend_username = "NewFriend";
+
+    std::string json_str = msg.ToJsonString();
+    AcceptFriendResponse restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_TRUE(restored.success);
+    EXPECT_EQ(restored.friend_id, 99u);
+    EXPECT_EQ(restored.friend_username, "NewFriend");
+}
+
+TEST(FriendMessageTest, DeleteFriendRequest) {
+    DeleteFriendRequest msg;
+    msg.friend_id = 55;
+
+    std::string json_str = msg.ToJsonString();
+    DeleteFriendRequest restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.friend_id, 55u);
+}
+
+TEST(FriendMessageTest, FriendListRequest) {
+    FriendListRequest msg;
+    EXPECT_EQ(msg.GetType(), MessageType::kFriendListRequest);
+
+    std::string json_str = msg.ToJsonString();
+    FriendListRequest restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+}
+
+TEST(FriendMessageTest, FriendListResponse) {
+    FriendListResponse msg;
+    msg.success = true;
+    FriendListResponse::FriendItem f;
+    f.id = 1; f.email = "f@t.com"; f.username = "Friend1";
+    f.avatar = "/av.png"; f.online = true;
+    msg.friends.push_back(f);
+
+    std::string json_str = msg.ToJsonString();
+    FriendListResponse restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_TRUE(restored.success);
+    ASSERT_EQ(restored.friends.size(), 1u);
+    EXPECT_EQ(restored.friends[0].username, "Friend1");
+    EXPECT_TRUE(restored.friends[0].online);
+}
+
+TEST(FriendMessageTest, FactoryCreatesAllFriendTypes) {
+    EXPECT_NE(Message::Create(MessageType::kSearchUserRequest), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kSearchUserResponse), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kAddFriendRequest), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kAddFriendResponse), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kAcceptFriendRequest), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kAcceptFriendResponse), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kDeleteFriendRequest), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kDeleteFriendResponse), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kFriendListRequest), nullptr);
+    EXPECT_NE(Message::Create(MessageType::kFriendListResponse), nullptr);
+}
+
+// ============================================================
 // MessageTypeName 测试
 // ============================================================
 
@@ -580,6 +703,10 @@ TEST(MessageTypeNameTest, AllTypesHaveName) {
     EXPECT_STREQ(MessageTypeName(MessageType::kPrivateMessage), "PrivateMessage");
     EXPECT_STREQ(MessageTypeName(MessageType::kSystemMessage), "SystemMessage");
     EXPECT_STREQ(MessageTypeName(MessageType::kError), "Error");
+    // 新增好友类型
+    EXPECT_STREQ(MessageTypeName(MessageType::kSearchUserRequest), "SearchUserRequest");
+    EXPECT_STREQ(MessageTypeName(MessageType::kAddFriendRequest), "AddFriendRequest");
+    EXPECT_STREQ(MessageTypeName(MessageType::kFriendListResponse), "FriendListResponse");
 }
 
 // ============================================================
