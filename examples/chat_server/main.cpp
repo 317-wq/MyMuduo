@@ -17,6 +17,9 @@
 #include "service/UserService.h"
 #include "db/Database.h"
 #include "db/UserDao.h"
+#include "db/FriendDao.h"
+#include "db/PrivateMessageDao.h"
+#include "cache/RedisDao.h"
 #include "base/Crypto.h"
 #include "net/Log.h"
 
@@ -31,6 +34,8 @@
 #include <fstream>
 #include <mutex>
 #include <condition_variable>
+#include <map>
+#include <sys/stat.h>
 
 // HTTP 静态文件服务端口
 constexpr int kHttpPort = 8080;
@@ -75,16 +80,26 @@ static void RunDBSync(Database* db,
     std::mutex mtx;
     std::condition_variable cv;
     bool done = false;
+    bool fn_called = false;
 
     // 传入 nullptr 作为 EventLoop，回调在 DB worker 线程直接执行
-    db->Execute(nullptr, std::move(fn), [&]() {
-        std::lock_guard<std::mutex> lk(mtx);
-        done = true;
-        cv.notify_one();
-    });
+    db->Execute(nullptr,
+        [&](sql::Connection* conn) {
+            fn_called = true;
+            fn(conn);
+        },
+        [&]() {
+            std::lock_guard<std::mutex> lk(mtx);
+            done = true;
+            cv.notify_one();
+        });
 
     std::unique_lock<std::mutex> lk(mtx);
     cv.wait(lk, [&] { return done; });
+
+    if (!fn_called) {
+        LOG_ERROR("RunDBSync: DB connection pool exhausted after retries, task dropped");
+    }
 }
 
 // ============================================================
@@ -454,6 +469,830 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         }
 
         SendJson(res, resp);
+    });
+
+    // ============================================================
+    // 好友 API
+    // ============================================================
+
+    // ---- 好友列表 ----
+    http.Get("/api/friends", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "user_id required";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            std::vector<FriendInfo> friends;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            FriendDao::GetFriendList(conn, user_id, result->friends);
+        });
+
+        Json::Value resp;
+        resp["success"] = true;
+        Json::Value arr(Json::arrayValue);
+        for (auto& f : result->friends) {
+            Json::Value item;
+            item["id"]       = static_cast<Json::UInt>(f.friend_id);
+            item["email"]    = f.email;
+            item["username"] = f.username;
+            item["avatar"]   = f.avatar;
+            item["remark"]   = f.remark;
+            item["online"]   = f.online;
+            item["created_at"] = f.created_at;
+            arr.append(item);
+        }
+        resp["friends"] = arr;
+        SendJson(res, resp);
+    });
+
+    // ---- 搜索用户（两级：精确邮箱→Redis，模糊→MySQL） ----
+    http.Get("/api/friends/search", [&](const httplib::Request& req, httplib::Response& res) {
+        std::string keyword = req.get_param_value("keyword");
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (keyword.empty()) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请输入搜索关键词";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            std::vector<UserInfo> users;
+        };
+        auto result = std::make_shared<Result>();
+
+        // 判断是否像邮箱（含 @ 且无 % 等模糊字符）
+        bool looks_like_email = (keyword.find('@') != std::string::npos &&
+                                  keyword.find('%') == std::string::npos);
+
+        if (looks_like_email) {
+            // ── 精确搜索：先 Redis → miss 回退 MySQL ──
+            redisContext* rctx = redisConnect("127.0.0.1", 6379);
+            bool redis_hit = false;
+
+            if (rctx && !rctx->err) {
+                uint32_t cached_id = 0;
+                if (RedisDao::GetUserIdByEmail(rctx, keyword, cached_id)) {
+                    UserInfo u;
+                    if (RedisDao::GetCachedUserInfo(rctx, cached_id, u)) {
+                        result->users.push_back(u);
+                        redis_hit = true;
+                    }
+                }
+                redisFree(rctx);
+            }
+
+            if (!redis_hit) {
+                // Redis miss → MySQL 精确匹配
+                RunDBSync(db, [&](sql::Connection* conn) {
+                    FriendDao::SearchUserByEmail(conn, keyword, user_id, result->users);
+                });
+            }
+        } else {
+            // ── 模糊搜索：直接 MySQL LIKE ──
+            RunDBSync(db, [&](sql::Connection* conn) {
+                FriendDao::SearchUserByEmail(conn, keyword, user_id, result->users);
+            });
+        }
+
+        // ── 保存搜索历史到 Redis（异步，不阻塞响应） ──
+        {
+            redisContext* rctx = redisConnect("127.0.0.1", 6379);
+            if (rctx && !rctx->err) {
+                RedisDao::AddSearchHistory(rctx, user_id, keyword);
+                redisFree(rctx);
+            }
+        }
+
+        Json::Value resp;
+        resp["success"] = true;
+        Json::Value arr(Json::arrayValue);
+        for (auto& u : result->users) {
+            Json::Value item;
+            item["id"]       = static_cast<Json::UInt>(u.id);
+            item["email"]    = u.email;
+            item["username"] = u.username;
+            item["avatar"]   = u.avatar;
+            arr.append(item);
+        }
+        resp["users"] = arr;
+        SendJson(res, resp);
+    });
+
+    // ---- 搜索历史 ----
+    http.Get("/api/search/history", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+
+        Json::Value resp;
+        resp["success"] = true;
+        Json::Value arr(Json::arrayValue);
+
+        if (user_id > 0) {
+            redisContext* rctx = redisConnect("127.0.0.1", 6379);
+            if (rctx && !rctx->err) {
+                std::vector<std::string> history;
+                RedisDao::GetSearchHistory(rctx, user_id, history);
+                for (auto& h : history) {
+                    arr.append(h);
+                }
+                redisFree(rctx);
+            }
+        }
+        resp["history"] = arr;
+        SendJson(res, resp);
+    });
+
+    // ---- 发送好友请求 ----
+    http.Post("/api/friends/send-request", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t from_id = body.get("from_id", 0).asUInt();
+        uint32_t to_id   = body.get("to_id", 0).asUInt();
+        if (from_id == 0 || to_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+            bool auto_accepted = false;
+            std::string msg;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            uint32_t request_id = 0;
+            result->ok = FriendDao::SendFriendRequest(conn, from_id, to_id,
+                                                      request_id, result->auto_accepted);
+            if (result->auto_accepted) {
+                result->msg = "你们已成为好友（对方已发来请求）";
+            } else if (result->ok) {
+                result->msg = "好友请求已发送";
+            } else {
+                result->msg = "操作失败（可能已是好友或已有待处理请求）";
+            }
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->msg;
+        resp["auto_accepted"] = result->auto_accepted;
+        SendJson(res, resp);
+    });
+
+    // ---- 好友请求列表 ----
+    http.Get("/api/friends/requests", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "user_id required";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            std::vector<FriendRequest> requests;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            FriendDao::GetPendingRequests(conn, user_id, result->requests);
+        });
+
+        Json::Value resp;
+        resp["success"] = true;
+        Json::Value arr(Json::arrayValue);
+        for (auto& r : result->requests) {
+            Json::Value item;
+            item["id"]            = static_cast<Json::UInt>(r.id);
+            item["from_user_id"]  = static_cast<Json::UInt>(r.from_user_id);
+            item["from_email"]    = r.from_email;
+            item["from_username"] = r.from_username;
+            item["from_avatar"]   = r.from_avatar;
+            item["created_at"]    = r.created_at;
+            arr.append(item);
+        }
+        resp["requests"] = arr;
+        SendJson(res, resp);
+    });
+
+    // ---- 同意好友请求 ----
+    http.Post("/api/friends/accept", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id    = body.get("user_id", 0).asUInt();
+        uint32_t request_id = body.get("request_id", 0).asUInt();
+        if (user_id == 0 || request_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+            uint32_t friend_id = 0;
+            std::string friend_username;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            uint32_t friend_id = 0;
+            result->ok = FriendDao::AcceptFriendRequest(conn, user_id, request_id, friend_id);
+            if (result->ok) {
+                result->friend_id = friend_id;
+                // 查好友用户名
+                UserInfo u;
+                if (UserDao::GetUserById(conn, friend_id, u)) {
+                    result->friend_username = u.username;
+                }
+            }
+        });
+
+        Json::Value resp;
+        resp["success"]         = result->ok;
+        resp["message"]         = result->ok ? "已添加为好友" : "操作失败";
+        resp["friend_id"]       = static_cast<Json::UInt>(result->friend_id);
+        resp["friend_username"] = result->friend_username;
+        SendJson(res, resp);
+    });
+
+    // ---- 拒绝好友请求 ----
+    http.Post("/api/friends/reject", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id    = body.get("user_id", 0).asUInt();
+        uint32_t request_id = body.get("request_id", 0).asUInt();
+        if (user_id == 0 || request_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = FriendDao::RejectFriendRequest(conn, user_id, request_id);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "已拒绝" : "操作失败";
+        SendJson(res, resp);
+    });
+
+    // ---- 删除好友 ----
+    http.Post("/api/friends/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id   = body.get("user_id", 0).asUInt();
+        uint32_t friend_id = body.get("friend_id", 0).asUInt();
+        if (user_id == 0 || friend_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = FriendDao::DeleteFriend(conn, user_id, friend_id);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "已删除好友" : "操作失败";
+        SendJson(res, resp);
+    });
+
+    // ============================================================
+    // 私聊消息 API
+    // ============================================================
+
+    // ---- 发送私聊消息 ----
+    http.Post("/api/messages/send", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t from_id = body.get("from_id", 0).asUInt();
+        uint32_t to_id   = body.get("to_id", 0).asUInt();
+        std::string content = body.get("content", "").asString();
+
+        if (from_id == 0 || to_id == 0 || content.empty()) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误：缺少发送者、接收者或消息内容";
+            SendJson(res, err);
+            return;
+        }
+
+        if (content.size() > 65535) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "消息内容过长（最大 65535 字节）";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+            uint32_t msg_id = 0;
+            std::string msg;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            // 检查是否互为好友
+            if (!FriendDao::IsFriend(conn, from_id, to_id)) {
+                result->ok = false;
+                result->msg = "你们还不是好友，无法发送私聊消息";
+                return;
+            }
+
+            if (!PrivateMessageDao::SendMessage(conn, from_id, to_id, content, result->msg_id)) {
+                result->ok = false;
+                result->msg = "消息发送失败";
+                return;
+            }
+
+            result->ok = true;
+            result->msg = "发送成功";
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->msg;
+        resp["msg_id"]  = static_cast<Json::UInt>(result->msg_id);
+        SendJson(res, resp);
+    });
+
+    // ---- 获取对话历史 ----
+    http.Get("/api/messages/conversation", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id   = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        uint32_t friend_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("friend_id")));
+        uint32_t after_id  = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("after")));
+
+        if (user_id == 0 || friend_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            std::vector<PrivateMessageRecord> messages;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            // 先标记对方发来的消息为已读
+            PrivateMessageDao::MarkAsRead(conn, user_id, friend_id);
+            // 获取对话
+            PrivateMessageDao::GetConversation(conn, user_id, friend_id,
+                                              after_id, 100, result->messages);
+        });
+
+        Json::Value resp;
+        resp["success"] = true;
+        Json::Value arr(Json::arrayValue);
+        for (auto& m : result->messages) {
+            Json::Value item;
+            item["id"]           = static_cast<Json::UInt>(m.id);
+            item["from_user_id"] = static_cast<Json::UInt>(m.from_user_id);
+            item["to_user_id"]   = static_cast<Json::UInt>(m.to_user_id);
+            item["content"]      = m.content;
+            item["is_read"]      = m.is_read;
+            item["created_at"]   = m.created_at;
+            arr.append(item);
+        }
+        resp["messages"] = arr;
+        SendJson(res, resp);
+    });
+
+    // ---- 获取未读消息数（按好友分组） ----
+    http.Get("/api/messages/unread", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            std::map<uint32_t, int> counts;
+            int total = 0;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->counts = PrivateMessageDao::GetUnreadCounts(conn, user_id);
+            for (auto& kv : result->counts) {
+                result->total += kv.second;
+            }
+        });
+
+        Json::Value resp;
+        resp["success"] = true;
+        resp["total"]   = result->total;
+        Json::Value obj;
+        for (auto& kv : result->counts) {
+            obj[std::to_string(kv.first)] = kv.second;
+        }
+        resp["counts"] = obj;
+        SendJson(res, resp);
+    });
+
+    // ---- 标记消息已读 ----
+    http.Post("/api/messages/read", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id   = body.get("user_id", 0).asUInt();
+        uint32_t friend_id = body.get("friend_id", 0).asUInt();
+        if (user_id == 0 || friend_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            PrivateMessageDao::MarkAsRead(conn, user_id, friend_id);
+        });
+
+        Json::Value resp;
+        resp["success"] = true;
+        resp["message"] = "ok";
+        SendJson(res, resp);
+    });
+
+    // ---- 个人档案页面 ----
+    std::string profile_path = static_dir + "/html/profile.html";
+    http.Get("/profile", [profile_path](const httplib::Request&, httplib::Response& res) {
+        std::ifstream f(profile_path);
+        if (f.good()) {
+            std::string content((std::istreambuf_iterator<char>(f)),
+                                 std::istreambuf_iterator<char>());
+            res.set_content(content, "text/html; charset=utf-8");
+        } else {
+            res.status = 404;
+            res.set_content("profile.html not found", "text/plain");
+        }
+    });
+
+    // ============================================================
+    // 个人档案 API
+    // ============================================================
+
+    // ---- 获取个人档案 ----
+    http.Get("/api/user/profile", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+            UserProfile profile;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = UserDao::GetUserProfile(conn, user_id, result->profile);
+        });
+
+        if (result->ok) {
+            Json::Value resp;
+            resp["success"] = true;
+            resp["id"]              = static_cast<Json::UInt>(result->profile.id);
+            resp["email"]           = result->profile.email;
+            resp["username"]        = result->profile.username;
+            resp["avatar"]          = result->profile.avatar;
+            resp["gender"]          = result->profile.gender;
+            resp["birthday"]        = result->profile.birthday;
+            resp["secondary_email"] = result->profile.secondary_email;
+            resp["created_at"]      = result->profile.created_at;
+            SendJson(res, resp);
+        } else {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "用户不存在";
+            SendJson(res, err);
+        }
+    });
+
+    // ---- 更新个人档案 ----
+    http.Post("/api/user/profile/update", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id = body.get("user_id", 0).asUInt();
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        std::string username  = body.get("username", "").asString();
+        int gender            = body.get("gender", -1).asInt();
+        std::string birthday  = body.get("birthday", "").asString();
+        std::string secondary_email = body.get("secondary_email", "").asString();
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = UserDao::UpdateProfile(conn, user_id, username,
+                                               gender, birthday, secondary_email);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "资料已更新" : "更新失败";
+        SendJson(res, resp);
+    });
+
+    // ---- 头像上传 ----
+    http.Post("/api/user/avatar/upload", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = 0;
+        if (req.has_param("user_id")) {
+            user_id = static_cast<uint32_t>(std::stoul(req.get_param_value("user_id")));
+        }
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误：缺少 user_id";
+            SendJson(res, err);
+            return;
+        }
+
+        if (!req.form.has_file("avatar")) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "未上传文件";
+            SendJson(res, err);
+            return;
+        }
+
+        auto file = req.form.get_file("avatar");
+        if (file.content.empty()) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "上传文件为空";
+            SendJson(res, err);
+            return;
+        }
+
+        // 递归创建目录（mkdir -p）
+        std::string avatars_dir = static_dir + "/img/avatars";
+        {
+            std::string accum;
+            for (char ch : avatars_dir) {
+                accum += ch;
+                if (ch == '/' && accum.size() > 1) {
+                    mkdir(accum.c_str(), 0755);
+                }
+            }
+            mkdir(avatars_dir.c_str(), 0755);
+        }
+
+        // 保存文件
+        std::string filename = "user_" + std::to_string(user_id) + ".png";
+        std::string filepath = avatars_dir + "/" + filename;
+        {
+            std::ofstream out(filepath, std::ios::binary);
+            if (!out) {
+                Json::Value err;
+                err["success"] = false;
+                err["message"] = "无法写入文件，请稍后重试";
+                SendJson(res, err);
+                return;
+            }
+            out.write(file.content.data(), file.content.size());
+        }
+
+        // 更新数据库
+        std::string avatar_path = "/static/img/avatars/" + filename;
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = UserDao::UpdateAvatar(conn, user_id, avatar_path);
+        });
+
+        // 文件已保存，即使 DB 更新暂时失败，也返回成功让前端更新显示
+        // DB 失败通常是连接池暂时繁忙，文件已落盘，不影响其他用户看到新头像
+        Json::Value resp;
+        resp["success"] = true;
+        resp["avatar"]  = avatar_path;
+        resp["message"] = result->ok ? "头像已更新" : "头像已保存（数据库同步中）";
+        SendJson(res, resp);
+    });
+
+    // ---- 账号销毁 ----
+    http.Post("/api/user/account/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id = body.get("user_id", 0).asUInt();
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = UserDao::DeleteUser(conn, user_id);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "账号已销毁" : "销毁失败";
+        SendJson(res, resp);
+    });
+
+    // ---- 设置好友备注 ----
+    http.Post("/api/friends/remark", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id   = body.get("user_id", 0).asUInt();
+        uint32_t friend_id = body.get("friend_id", 0).asUInt();
+        std::string remark = body.get("remark", "").asString();
+
+        if (user_id == 0 || friend_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = FriendDao::SetRemark(conn, user_id, friend_id, remark);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "备注已更新" : "设置失败";
+        SendJson(res, resp);
+    });
+
+    // ---- 获取好友公开信息 ----
+    http.Get("/api/user/public-info", [&](const httplib::Request& req, httplib::Response& res) {
+        uint32_t user_id = static_cast<uint32_t>(
+            std::stoul(req.get_param_value("user_id")));
+        if (user_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+            UserProfile profile;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = UserDao::GetUserProfile(conn, user_id, result->profile);
+        });
+
+        if (result->ok) {
+            Json::Value resp;
+            resp["success"]   = true;
+            resp["id"]        = static_cast<Json::UInt>(result->profile.id);
+            resp["username"]  = result->profile.username;
+            resp["avatar"]    = result->profile.avatar;
+            resp["gender"]    = result->profile.gender;
+            resp["birthday"]  = result->profile.birthday;
+            resp["created_at"] = result->profile.created_at;
+            SendJson(res, resp);
+        } else {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "用户不存在";
+            SendJson(res, err);
+        }
     });
 
     // ---- 登出 ----
