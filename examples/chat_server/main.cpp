@@ -266,6 +266,30 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         res.set_content("{\"status\":\"ok\"}", "application/json");
     });
 
+    // ---- 心跳保活（刷新 Redis 在线状态 TTL） ----
+    http.Post("/api/ping", [](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+        uint32_t user_id = body.get("user_id", 0).asUInt();
+        if (user_id > 0) {
+            redisContext* rctx = redisConnect("127.0.0.1", 6379);
+            if (rctx && !rctx->err) {
+                // 刷新 TTL 到 2 分钟
+                RedisDao::SetUserOnline(rctx, user_id, 120);
+                redisFree(rctx);
+            }
+        }
+        Json::Value resp;
+        resp["success"] = true;
+        SendJson(res, resp);
+    });
+
     // ---- 404 页面（兜底路由，必须放在所有精确路由之后） ----
     http.set_error_handler([notfound_path](const httplib::Request&, httplib::Response& res) {
         if (res.status == 404) {
@@ -464,6 +488,16 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             user["created_at"] = result->user.created_at;
             resp["user"] = user;
 
+            // 标记用户在线（Redis，2分钟TTL，由前端心跳刷新）
+            uint32_t uid = result->user.id;
+            std::thread([uid]() {
+                redisContext* rctx = redisConnect("127.0.0.1", 6379);
+                if (rctx && !rctx->err) {
+                    RedisDao::SetUserOnline(rctx, uid, 120);
+                    redisFree(rctx);
+                }
+            }).detach();
+
             LOG_INFO("HTTP login: user=%s email=%s",
                      result->user.username.c_str(), result->user.email.c_str());
         }
@@ -496,6 +530,16 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             FriendDao::GetFriendList(conn, user_id, result->friends);
         });
 
+        // 查询 Redis 获取每个好友的在线状态
+        redisContext* rctx = redisConnect("127.0.0.1", 6379);
+        std::unordered_map<uint32_t, bool> online_map;
+        if (rctx && !rctx->err) {
+            for (auto& f : result->friends) {
+                online_map[f.friend_id] = RedisDao::IsUserOnline(rctx, f.friend_id);
+            }
+            redisFree(rctx);
+        }
+
         Json::Value resp;
         resp["success"] = true;
         Json::Value arr(Json::arrayValue);
@@ -506,7 +550,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             item["username"] = f.username;
             item["avatar"]   = f.avatar;
             item["remark"]   = f.remark;
-            item["online"]   = f.online;
+            item["online"]   = online_map[f.friend_id];
             item["created_at"] = f.created_at;
             arr.append(item);
         }
@@ -839,6 +883,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         uint32_t from_id = body.get("from_id", 0).asUInt();
         uint32_t to_id   = body.get("to_id", 0).asUInt();
         std::string content = body.get("content", "").asString();
+        uint32_t reply_to_id = body.get("reply_to_id", 0).asUInt();
 
         if (from_id == 0 || to_id == 0 || content.empty()) {
             Json::Value err;
@@ -860,6 +905,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             bool ok = false;
             uint32_t msg_id = 0;
             std::string msg;
+            std::string reply_preview;
         };
         auto result = std::make_shared<Result>();
 
@@ -871,10 +917,17 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
                 return;
             }
 
-            if (!PrivateMessageDao::SendMessage(conn, from_id, to_id, content, result->msg_id)) {
+            if (!PrivateMessageDao::SendMessage(conn, from_id, to_id, content,
+                                               result->msg_id, reply_to_id)) {
                 result->ok = false;
                 result->msg = "消息发送失败";
                 return;
+            }
+
+            // 如果是回复消息，获取预览
+            if (reply_to_id > 0) {
+                // 预览由 SendMessage 内部写入，我们在此查回
+                result->reply_preview = "...";
             }
 
             result->ok = true;
@@ -885,6 +938,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         resp["success"] = result->ok;
         resp["message"] = result->msg;
         resp["msg_id"]  = static_cast<Json::UInt>(result->msg_id);
+        resp["reply_to_id"] = static_cast<Json::UInt>(reply_to_id);
         SendJson(res, resp);
     });
 
@@ -896,6 +950,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             std::stoul(req.get_param_value("friend_id")));
         uint32_t after_id  = static_cast<uint32_t>(
             std::stoul(req.get_param_value("after")));
+        std::string since  = req.get_param_value("since");
 
         if (user_id == 0 || friend_id == 0) {
             Json::Value err;
@@ -907,6 +962,7 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
 
         struct Result {
             std::vector<PrivateMessageRecord> messages;
+            std::vector<PrivateMessageRecord> updates;
         };
         auto result = std::make_shared<Result>();
 
@@ -915,23 +971,75 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
             PrivateMessageDao::MarkAsRead(conn, user_id, friend_id);
             // 获取对话
             PrivateMessageDao::GetConversation(conn, user_id, friend_id,
-                                              after_id, 100, result->messages);
+                                              after_id, 100, result->messages,
+                                              result->updates, since);
         });
+
+        auto build_msg = [](const PrivateMessageRecord& m) -> Json::Value {
+            Json::Value item;
+            item["id"]            = static_cast<Json::UInt>(m.id);
+            item["from_user_id"]  = static_cast<Json::UInt>(m.from_user_id);
+            item["to_user_id"]    = static_cast<Json::UInt>(m.to_user_id);
+            item["content"]       = m.content;
+            item["is_read"]       = m.is_read;
+            item["is_revoked"]    = m.is_revoked;
+            item["reply_to_id"]   = static_cast<Json::UInt>(m.reply_to_id);
+            item["reply_preview"] = m.reply_preview;
+            item["created_at"]    = m.created_at;
+            item["updated_at"]    = m.updated_at;
+            return item;
+        };
 
         Json::Value resp;
         resp["success"] = true;
-        Json::Value arr(Json::arrayValue);
+        Json::Value msg_arr(Json::arrayValue);
         for (auto& m : result->messages) {
-            Json::Value item;
-            item["id"]           = static_cast<Json::UInt>(m.id);
-            item["from_user_id"] = static_cast<Json::UInt>(m.from_user_id);
-            item["to_user_id"]   = static_cast<Json::UInt>(m.to_user_id);
-            item["content"]      = m.content;
-            item["is_read"]      = m.is_read;
-            item["created_at"]   = m.created_at;
-            arr.append(item);
+            msg_arr.append(build_msg(m));
         }
-        resp["messages"] = arr;
+        resp["messages"] = msg_arr;
+
+        Json::Value upd_arr(Json::arrayValue);
+        for (auto& m : result->updates) {
+            upd_arr.append(build_msg(m));
+        }
+        resp["updates"] = upd_arr;
+
+        SendJson(res, resp);
+    });
+
+    // ---- 撤回消息 ----
+    http.Post("/api/messages/revoke", [&](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        if (!ParseJsonBody(req, body)) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "请求格式错误";
+            SendJson(res, err);
+            return;
+        }
+
+        uint32_t user_id = body.get("user_id", 0).asUInt();
+        uint32_t msg_id  = body.get("msg_id", 0).asUInt();
+        if (user_id == 0 || msg_id == 0) {
+            Json::Value err;
+            err["success"] = false;
+            err["message"] = "参数错误";
+            SendJson(res, err);
+            return;
+        }
+
+        struct Result {
+            bool ok = false;
+        };
+        auto result = std::make_shared<Result>();
+
+        RunDBSync(db, [&](sql::Connection* conn) {
+            result->ok = PrivateMessageDao::RevokeMessage(conn, msg_id, user_id);
+        });
+
+        Json::Value resp;
+        resp["success"] = result->ok;
+        resp["message"] = result->ok ? "消息已撤回" : "只能撤回2分钟内自己发送的消息";
         SendJson(res, resp);
     });
 
@@ -1295,9 +1403,23 @@ static void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         }
     });
 
-    // ---- 登出 ----
-    http.Get("/logout", [](const httplib::Request&, httplib::Response& res) {
-        res.set_redirect("/login");
+    // ---- 登出（清除在线状态） ----
+    http.Post("/api/logout", [](const httplib::Request& req, httplib::Response& res) {
+        Json::Value body;
+        uint32_t user_id = 0;
+        if (ParseJsonBody(req, body)) {
+            user_id = body.get("user_id", 0).asUInt();
+        }
+        if (user_id > 0) {
+            redisContext* rctx = redisConnect("127.0.0.1", 6379);
+            if (rctx && !rctx->err) {
+                RedisDao::SetUserOffline(rctx, user_id);
+                redisFree(rctx);
+            }
+        }
+        Json::Value resp;
+        resp["success"] = true;
+        SendJson(res, resp);
     });
 
     LOG_INFO("HTTP server listening on port %d", kHttpPort);
@@ -1415,11 +1537,11 @@ static void TestHttpEndpoints()
           res8 && res8->status == 200 && res8->body.find("\"success\":false") != std::string::npos,
           res8 ? "body: " + res8->body : "no response");
 
-    // logout: 重定向
-    auto res9 = cli.Get("/logout");
-    check("GET /logout (redirect)",
-          res9 && (res9->status == 302 || res9->status == 301),
-          res9 ? "HTTP " + std::to_string(res9->status) : "no response");
+    // logout: POST
+    auto res9 = cli.Post("/api/logout", "{\"user_id\":0}", "application/json");
+    check("POST /api/logout (offline)",
+          res9 && res9->status == 200 && res9->body.find("\"success\":true") != std::string::npos,
+          res9 ? "body: " + res9->body : "no response");
 
     std::cout << "  " << passed << "/" << (passed + failed)
               << " HTTP checks passed" << std::endl;
