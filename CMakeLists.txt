@@ -225,3 +225,22 @@ target_link_libraries(chat_server
     curl
     hiredis
 )
+
+# ============ 压测目标 ============
+
+# HTTP Echo 压测服务端 (配合 wrk 使用)
+add_executable(echo_bench
+    benchmark/echo_server.cpp
+    ${NET_SRCS}
+)
+target_link_libraries(echo_bench
+    pthread
+)
+
+# TCP 原生协议压测客户端
+add_executable(tcp_bench
+    benchmark/tcp_bench.cpp
+)
+target_link_libraries(tcp_bench
+    pthread
+)
