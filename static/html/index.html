@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyChat - 好友</title>
+    <link rel="stylesheet" href="/static/css/themes.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             height: 100vh; overflow: hidden;
-            background: #f0f2f5;
+            background: var(--bg-primary);
         }
 
         .app { display: flex; height: 100vh; max-width: 1100px; margin: 0 auto; }
@@ -17,44 +18,45 @@
         /* ── 侧边栏 ── */
         .sidebar {
             width: 280px; min-width: 280px;
-            background: rgba(255,255,255,0.94);
+            background: var(--bg-secondary);
             display: flex; flex-direction: column;
-            border-right: 1px solid rgba(0,0,0,0.08);
+            border-right: 1px solid var(--border);
         }
         .sidebar-header {
             padding: 16px 16px 12px;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
+            border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 10px;
         }
         .sidebar-header .avatar {
             width: 36px; height: 36px; line-height: 36px; text-align: center;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white; border-radius: 50%; font-size: 16px; font-weight: 600;
+            background: var(--accent-gradient);
+            color: var(--text-inverse); border-radius: 50%; font-size: 16px; font-weight: 600;
             flex-shrink: 0;
         }
         .sidebar-header .info { flex:1; min-width: 0; }
-        .sidebar-header .name { font-weight: 600; font-size: 14px; color: #333; }
-        .sidebar-header .email { font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .logout-link { font-size: 12px; color: #e53e3e; cursor: pointer; text-decoration: none; }
+        .sidebar-header .name { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+        .sidebar-header .email { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .logout-link { font-size: 12px; color: var(--danger); cursor: pointer; text-decoration: none; }
         .logout-link:hover { text-decoration: underline; }
 
         /* 搜索栏 */
         .search-wrap { position: relative; flex: 1; }
         .search-box {
             padding: 10px 14px;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
+            border-bottom: 1px solid var(--border);
             display: flex; gap: 6px;
         }
         .search-box input {
-            flex: 1; padding: 7px 10px; border: 2px solid #e0e0e0;
+            flex: 1; padding: 7px 10px; border: 2px solid var(--border-input);
             border-radius: 8px; font-size: 13px; outline: none;
             transition: border-color 0.3s; width: 100%;
+            background: var(--bg-input); color: var(--text-primary);
         }
-        .search-box input:focus { border-color: #667eea; }
+        .search-box input:focus { border-color: var(--border-input-focus); }
         .search-box button {
             padding: 7px 12px; border: none; border-radius: 8px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white; font-size: 12px; font-weight: 600; cursor: pointer;
+            background: var(--accent-gradient);
+            color: var(--text-inverse); font-size: 12px; font-weight: 600; cursor: pointer;
             white-space: nowrap;
         }
 
@@ -62,37 +64,37 @@
         .history-dropdown {
             display: none;
             position: absolute; top: 100%; left: 0; right: 0;
-            background: white; border: 1px solid #e0e0e0;
-            border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            background: var(--bg-modal); border: 1px solid var(--border-input);
+            border-radius: 0 0 8px 8px; box-shadow: var(--shadow-md);
             z-index: 10; max-height: 200px; overflow-y: auto;
         }
         .history-dropdown.show { display: block; }
         .history-dropdown .history-item {
-            padding: 8px 12px; font-size: 12px; color: #555; cursor: pointer;
+            padding: 8px 12px; font-size: 12px; color: var(--text-secondary); cursor: pointer;
             display: flex; align-items: center; gap: 8px;
             transition: background 0.2s;
         }
-        .history-dropdown .history-item:hover { background: #f5f5ff; }
-        .history-dropdown .history-item .clock { font-size: 11px; color: #bbb; }
+        .history-dropdown .history-item:hover { background: var(--bg-hover); }
+        .history-dropdown .history-item .clock { font-size: 11px; color: var(--text-muted); }
         .history-dropdown .history-header {
-            padding: 6px 12px; font-size: 10px; color: #bbb;
+            padding: 6px 12px; font-size: 10px; color: var(--text-muted);
             text-transform: uppercase; letter-spacing: 0.5px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border-light);
         }
 
         /* Tab 切换 */
         .tabs {
-            display: flex; border-bottom: 1px solid rgba(0,0,0,0.06);
+            display: flex; border-bottom: 1px solid var(--border);
         }
         .tab {
             flex: 1; padding: 10px 0; text-align: center; font-size: 13px;
-            color: #999; cursor: pointer; border-bottom: 2px solid transparent;
+            color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
             transition: all 0.2s; position: relative;
         }
-        .tab.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
         .tab .badge {
             position: absolute; top: 6px; right: 12px;
-            background: #e53e3e; color: white; font-size: 10px;
+            background: var(--badge-bg); color: var(--badge-text); font-size: 10px;
             padding: 1px 6px; border-radius: 10px; min-width: 18px;
         }
 
@@ -103,28 +105,28 @@
         .list-item {
             display: flex; align-items: center; gap: 10px;
             padding: 10px 14px; cursor: pointer;
-            border-bottom: 1px solid rgba(0,0,0,0.03);
+            border-bottom: 1px solid var(--border-light);
             transition: background 0.2s;
         }
-        .list-item:hover { background: rgba(0,0,0,0.03); }
-        .list-item.active { background: rgba(102,126,234,0.1); }
+        .list-item:hover { background: var(--bg-hover); }
+        .list-item.active { background: var(--bg-active); }
         .list-item .item-avatar {
             width: 34px; height: 34px; line-height: 34px; text-align: center;
-            border-radius: 50%; font-size: 13px; font-weight: 600; color: white;
+            border-radius: 50%; font-size: 13px; font-weight: 600; color: var(--text-inverse);
             flex-shrink: 0;
         }
         .list-item .item-info { flex: 1; min-width: 0; }
-        .list-item .item-name { font-size: 13px; font-weight: 500; color: #333; }
-        .list-item .item-email { font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .list-item .item-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .list-item .item-email { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .online-dot {
             width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-            background: #ccc;
+            background: var(--offline-dot);
         }
-        .online-dot.online { background: #48bb78; }
+        .online-dot.online { background: var(--online-dot); }
 
         /* 未读消息角标 */
         .unread-badge {
-            background: #e53e3e; color: white; font-size: 10px;
+            background: var(--badge-bg); color: var(--badge-text); font-size: 10px;
             padding: 1px 6px; border-radius: 10px; min-width: 18px;
             text-align: center; flex-shrink: 0; display: none;
         }
@@ -137,28 +139,28 @@
             transition: transform 0.2s;
         }
         .btn-sm:hover { transform: translateY(-1px); }
-        .btn-accept { background: #48bb78; color: white; }
-        .btn-reject { background: #e53e3e; color: white; }
-        .btn-add   { background: #667eea; color: white; }
-        .btn-delete { background: transparent; color: #e53e3e; border: 1px solid #fed7d7; }
+        .btn-accept { background: var(--success); color: white; }
+        .btn-reject { background: var(--danger); color: white; }
+        .btn-add   { background: var(--accent); color: white; }
+        .btn-delete { background: transparent; color: var(--danger); border: 1px solid var(--danger-border); }
 
         /* 侧边栏底部 */
         .sidebar-footer {
-            padding: 10px 14px; border-top: 1px solid rgba(0,0,0,0.06);
-            font-size: 11px; color: #bbb; text-align: center;
+            padding: 10px 14px; border-top: 1px solid var(--border);
+            font-size: 11px; color: var(--text-muted); text-align: center;
         }
 
         /* ── 主区域 ── */
         .main {
             flex: 1; display: flex; flex-direction: column;
-            background: rgba(255,255,255,0.85);
+            background: var(--bg-secondary);
         }
         .chat-header {
-            padding: 16px 24px; font-size: 15px; font-weight: 600; color: #333;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
+            padding: 16px 24px; font-size: 15px; font-weight: 600; color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 10px;
         }
-        .chat-header .status { font-weight: 400; font-size: 12px; color: #999; }
+        .chat-header .status { font-weight: 400; font-size: 12px; color: var(--text-muted); }
 
         /* 消息区域 */
         .messages {
@@ -167,10 +169,10 @@
         }
         .messages .placeholder {
             display: flex; flex-direction: column; align-items: center;
-            justify-content: center; flex: 1; color: #bbb; font-size: 14px;
+            justify-content: center; flex: 1; color: var(--text-muted); font-size: 14px;
         }
         .messages .placeholder .icon { font-size: 64px; margin-bottom: 12px; }
-        .messages .placeholder .sub { font-size: 12px; margin-top: 8px; color: #ccc; }
+        .messages .placeholder .sub { font-size: 12px; margin-top: 8px; color: var(--text-muted); }
 
         /* 消息气泡 */
         .msg-row {
@@ -184,7 +186,7 @@
         .msg-row .msg-avatar {
             width: 34px; height: 34px; border-radius: 50%;
             flex-shrink: 0; background-size: cover; background-position: center;
-            font-size: 14px; font-weight: 600; color: white;
+            font-size: 14px; font-weight: 600; color: var(--text-inverse);
             text-align: center; line-height: 34px;
         }
 
@@ -201,50 +203,51 @@
             white-space: pre-wrap;
         }
         .msg-row.mine .msg-bubble {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--bubble-mine-bg);
+            color: var(--bubble-mine-text);
             border-bottom-right-radius: 4px;
         }
         .msg-row.theirs .msg-bubble {
-            background: #f0f0f0; color: #333;
+            background: var(--bubble-theirs-bg); color: var(--bubble-theirs-text);
             border-bottom-left-radius: 4px;
         }
 
         .msg-time {
-            font-size: 11px; color: #bbb; margin-top: 2px; padding: 0 4px;
+            font-size: 11px; color: var(--text-muted); margin-top: 2px; padding: 0 4px;
         }
 
         .msg-system {
-            align-self: center; font-size: 12px; color: #bbb;
-            background: rgba(0,0,0,0.04); padding: 6px 16px;
+            align-self: center; font-size: 12px; color: var(--text-muted);
+            background: var(--bg-hover); padding: 6px 16px;
             border-radius: 12px; max-width: 80%;
             text-align: center;
         }
 
         /* 输入区域 */
         .input-area {
-            padding: 14px 24px; border-top: 1px solid rgba(0,0,0,0.06);
+            padding: 14px 24px; border-top: 1px solid var(--border);
             display: flex; gap: 10px; align-items: flex-end;
         }
         .input-area textarea {
-            flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0;
+            flex: 1; padding: 10px 14px; border: 2px solid var(--border-input);
             border-radius: 10px; font-size: 14px; font-family: inherit;
             resize: none; outline: none; line-height: 1.5;
             transition: border-color 0.3s;
             max-height: 120px;
+            background: var(--bg-input); color: var(--text-primary);
         }
-        .input-area textarea:focus { border-color: #667eea; }
+        .input-area textarea:focus { border-color: var(--border-input-focus); }
         .input-hint {
-            font-size: 11px; color: #bbb; padding: 4px 0 0 4px;
+            font-size: 11px; color: var(--text-muted); padding: 4px 0 0 4px;
         }
         .send-btn {
             padding: 10px 22px; border: none; border-radius: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+            background: var(--accent-gradient);
+            color: var(--text-inverse); font-size: 14px; font-weight: 600; cursor: pointer;
             transition: transform 0.2s; flex-shrink: 0;
         }
         .send-btn:hover { transform: translateY(-1px); }
-        .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .send-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
 
         /* Toast */
         .toast {
@@ -253,55 +256,57 @@
             animation: fadeIn 0.3s; pointer-events: none;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translate(-50%,-6px); } to { opacity: 1; transform: translate(-50%,0); } }
-        .toast.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
-        .toast.info  { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
-        .toast.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .toast.error { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+        .toast.info  { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border); }
+        .toast.success { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
 
         /* 好友信息弹窗 */
         .modal-overlay {
             display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.45); z-index: 200;
+            background: var(--bg-overlay); z-index: 200;
             align-items: center; justify-content: center;
         }
         .modal-overlay.show { display: flex; }
         .modal-card {
-            background: white; border-radius: 16px; padding: 28px 24px;
+            background: var(--bg-modal); border-radius: 16px; padding: 28px 24px;
             width: 360px; max-width: 90vw; text-align: center;
+            box-shadow: var(--modal-shadow);
             animation: modalIn 0.25s ease-out;
         }
         @keyframes modalIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
         .modal-card .modal-avatar {
             width: 72px; height: 72px; line-height: 72px; text-align: center;
-            border-radius: 50%; font-size: 28px; font-weight: 600; color: white;
+            border-radius: 50%; font-size: 28px; font-weight: 600; color: var(--text-inverse);
             margin: 0 auto 12px; background-size: cover; background-position: center;
         }
-        .modal-card .modal-name { font-size: 17px; font-weight: 600; color: #333; margin-bottom: 4px; }
-        .modal-card .modal-email { font-size: 12px; color: #999; margin-bottom: 16px; }
+        .modal-card .modal-name { font-size: 17px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .modal-card .modal-email { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
         .modal-card .modal-info {
-            font-size: 13px; color: #666; line-height: 1.8;
-            text-align: left; background: #f8f8fb; border-radius: 10px;
+            font-size: 13px; color: var(--text-secondary); line-height: 1.8;
+            text-align: left; background: var(--bg-tertiary); border-radius: 10px;
             padding: 12px 16px; margin-bottom: 16px;
         }
-        .modal-card .modal-info span { color: #999; }
+        .modal-card .modal-info span { color: var(--text-muted); }
         .modal-card .remark-row {
             display: flex; gap: 8px; margin-bottom: 16px;
         }
         .modal-card .remark-row input {
-            flex: 1; padding: 8px 12px; border: 1px solid #e0e0e0;
+            flex: 1; padding: 8px 12px; border: 1px solid var(--border-input);
             border-radius: 8px; font-size: 13px; outline: none;
+            background: var(--bg-input); color: var(--text-primary);
         }
-        .modal-card .remark-row input:focus { border-color: #667eea; }
+        .modal-card .remark-row input:focus { border-color: var(--border-input-focus); }
         .modal-card .remark-row button {
             padding: 8px 14px; border: none; border-radius: 8px;
-            background: #667eea; color: white; font-size: 12px; font-weight: 600;
+            background: var(--accent); color: var(--text-inverse); font-size: 12px; font-weight: 600;
             cursor: pointer; white-space: nowrap;
         }
         .modal-card .modal-close {
-            margin-top: 4px; padding: 8px 20px; border: 1px solid #e0e0e0;
-            border-radius: 8px; background: white; color: #888; font-size: 13px;
+            margin-top: 4px; padding: 8px 20px; border: 1px solid var(--border-input);
+            border-radius: 8px; background: var(--bg-modal); color: var(--text-secondary); font-size: 13px;
             cursor: pointer;
         }
-        .modal-card .modal-close:hover { background: #f5f5f5; }
+        .modal-card .modal-close:hover { background: var(--bg-hover); }
 
         /* 侧边栏头像可点击 */
         .sidebar-header .avatar { cursor: pointer; }
@@ -317,40 +322,40 @@
         /* ── 右键菜单 ── */
         .msg-context-menu {
             display: none; position: fixed; z-index: 300;
-            background: white; border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            background: var(--bg-modal); border-radius: 10px;
+            box-shadow: var(--shadow-lg);
             min-width: 120px; padding: 6px 0;
         }
         .msg-context-menu .menu-item {
-            padding: 8px 18px; font-size: 13px; color: #333;
+            padding: 8px 18px; font-size: 13px; color: var(--text-primary);
             cursor: pointer; transition: background 0.15s;
         }
-        .msg-context-menu .menu-item:hover { background: #f5f5ff; }
-        .msg-context-menu .menu-item.danger { color: #e53e3e; }
-        .msg-context-menu .menu-item.disabled { color: #ccc; pointer-events: none; }
+        .msg-context-menu .menu-item:hover { background: var(--bg-hover); }
+        .msg-context-menu .menu-item.danger { color: var(--danger); }
+        .msg-context-menu .menu-item.disabled { color: var(--text-muted); pointer-events: none; }
 
         /* ── 回复栏 ── */
         .reply-bar {
             display: none; align-items: center; gap: 10px;
-            padding: 8px 24px; background: #f8f8fb;
-            border-top: 1px solid rgba(0,0,0,0.06);
-            font-size: 13px; color: #666;
+            padding: 8px 24px; background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            font-size: 13px; color: var(--text-secondary);
         }
         .reply-bar .reply-preview {
             flex: 1; overflow: hidden; text-overflow: ellipsis;
-            white-space: nowrap; color: #999;
+            white-space: nowrap; color: var(--text-muted);
         }
         .reply-bar .reply-cancel {
-            cursor: pointer; color: #bbb; font-size: 18px;
+            cursor: pointer; color: var(--text-muted); font-size: 18px;
             line-height: 1; padding: 0 4px;
         }
-        .reply-bar .reply-cancel:hover { color: #e53e3e; }
+        .reply-bar .reply-cancel:hover { color: var(--danger); }
 
         /* ── 引用消息条 ── */
         .msg-quote {
-            border-left: 3px solid #667eea;
+            border-left: 3px solid var(--accent);
             padding: 4px 10px; margin-bottom: 6px;
-            font-size: 12px; color: #888; background: rgba(102,126,234,0.06);
+            font-size: 12px; color: var(--text-secondary); background: var(--accent-light);
             border-radius: 4px; max-width: 100%;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
@@ -362,6 +367,27 @@
 
         /* ── 消息气泡 hover 显示操作提示 ── */
         .msg-bubble { position: relative; cursor: default; }
+
+        /* ── 主题选择器 ── */
+        .theme-picker {
+            display: flex; align-items: center; justify-content: center;
+            gap: 10px; padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-tertiary);
+        }
+        .theme-dot {
+            width: 20px; height: 20px; border-radius: 50%;
+            cursor: pointer; border: 2px solid transparent;
+            transition: all 0.25s; position: relative;
+            flex-shrink: 0;
+        }
+        .theme-dot:hover { transform: scale(1.2); }
+        .theme-dot.active { border-color: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-secondary); }
+        .theme-dot[data-theme="soft"]  { background: linear-gradient(135deg, #a08ecc, #f3efe9); }
+        .theme-dot[data-theme="warm"]  { background: linear-gradient(135deg, #f0a080, #fef8f0); }
+        .theme-dot[data-theme="forest"]{ background: linear-gradient(135deg, #78b886, #eff5ed); }
+        .theme-dot[data-theme="ocean"] { background: linear-gradient(135deg, #78a8da, #eff3f8); }
+        .theme-dot[data-theme="dark"]  { background: linear-gradient(135deg, #b098e0, #1a1a24); }
     </style>
 </head>
 <body>
@@ -399,7 +425,13 @@
 
         <div class="list-area" id="listArea"></div>
 
-        <!-- sidebar-footer removed -->
+        <div class="theme-picker" title="切换主题">
+            <span class="theme-dot" data-theme="soft" onclick="setTheme('soft')"></span>
+            <span class="theme-dot" data-theme="warm" onclick="setTheme('warm')"></span>
+            <span class="theme-dot" data-theme="forest" onclick="setTheme('forest')"></span>
+            <span class="theme-dot" data-theme="ocean" onclick="setTheme('ocean')"></span>
+            <span class="theme-dot" data-theme="dark" onclick="setTheme('dark')"></span>
+        </div>
     </aside>
 
     <!-- ════ 主区域 ════ -->
@@ -428,7 +460,7 @@
             <div class="menu-item" id="ctxReply" onclick="ctxReplyMsg()">💬 回复</div>
             <div class="menu-item danger" id="ctxRevoke" onclick="ctxRevokeMsg()">↩ 撤回</div>
             <div class="menu-item danger" id="ctxDelete" onclick="ctxDeleteMsg()">🗑 删除</div>
-            <div class="menu-divider" id="ctxDivider" style="height:1px;background:#eee;margin:4px 0;"></div>
+            <div class="menu-divider" id="ctxDivider" style="height:1px;background:var(--border);margin:4px 0;"></div>
             <div class="menu-item danger" id="ctxClear" onclick="ctxClearScreen()">🧹 清屏</div>
         </div>
     </main>
@@ -475,9 +507,41 @@ let lastPollTime = null;     // 上次轮询时间（ISO 字符串）
 let pingTimer = null;        // 心跳保活定时器
 
 // ═══════════════════════════════════════
+// 主题管理
+// ═══════════════════════════════════════
+const THEME_KEY = 'chat_theme';
+const THEMES = ['soft', 'warm', 'forest', 'ocean', 'dark'];
+
+function initTheme() {
+    let theme = localStorage.getItem(THEME_KEY);
+    if (!theme || !THEMES.includes(theme)) {
+        theme = 'soft';
+        localStorage.setItem(THEME_KEY, theme);
+    }
+    applyTheme(theme);
+}
+
+function setTheme(theme) {
+    if (!THEMES.includes(theme)) return;
+    localStorage.setItem(THEME_KEY, theme);
+    applyTheme(theme);
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    // 高亮当前选中的圆点
+    document.querySelectorAll('.theme-dot').forEach(d => {
+        d.classList.toggle('active', d.dataset.theme === theme);
+    });
+}
+
+// ═══════════════════════════════════════
 // 初始化
 // ═══════════════════════════════════════
 (function init() {
+    // 初始化主题（最先执行，避免闪烁）
+    initTheme();
+
     // sessionStorage 每标签页独立，支持多账号同时在线
     userId    = sessionStorage.getItem('user_id') || '';
     username  = sessionStorage.getItem('username') || 'Unknown';
@@ -567,7 +631,7 @@ let pingTimer = null;        // 心跳保活定时器
 function updateMyAvatar() {
     const el = document.getElementById('myAvatar');
     el.style.backgroundImage = '';
-    el.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+    el.style.background = colorFromId(parseInt(userId) || 0);
     el.textContent = username.charAt(0).toUpperCase();
 }
 
@@ -703,7 +767,7 @@ function renderList() {
 
     if (currentTab === 'friends') {
         if (friends.length === 0) {
-            area.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">暂无好友<br>用上方搜索框添加好友吧 👆</div>';
+            area.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:13px;">暂无好友<br>用上方搜索框添加好友吧 👆</div>';
             return;
         }
         area.innerHTML = friends.map(f => {
@@ -719,7 +783,7 @@ function renderList() {
                      onclick="event.stopPropagation();openFriendModal(${fid}, '${esc(f.username)}', '${esc(f.email)}', '${esc(f.avatar||'')}', '${esc(f.remark||'')}')"
                      title="查看资料">${av.text}</div>
                 <div class="item-info">
-                    <div class="item-name">${esc(displayName)}${f.remark ? ' <span style="font-size:11px;color:#999;">(' + esc(f.username) + ')</span>' : ''}</div>
+                    <div class="item-name">${esc(displayName)}${f.remark ? ' <span style="font-size:11px;color:var(--text-muted);">(' + esc(f.username) + ')</span>' : ''}</div>
                     <div class="item-email">${esc(f.email)}</div>
                 </div>
                 <span class="unread-badge" style="display:${unread > 0 ? 'inline' : 'none'}">${unread > 99 ? '99+' : unread}</span>
@@ -730,7 +794,7 @@ function renderList() {
 
     } else if (currentTab === 'requests') {
         if (requests.length === 0) {
-            area.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">暂无待处理请求</div>';
+            area.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:13px;">暂无待处理请求</div>';
             return;
         }
         area.innerHTML = requests.map(r => {
@@ -751,7 +815,7 @@ function renderList() {
 
     } else if (currentTab === 'search') {
         if (searchResults.length === 0) {
-            area.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">未找到匹配用户</div>';
+            area.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:13px;">未找到匹配用户</div>';
             return;
         }
         area.innerHTML = searchResults.map(u => {
@@ -1031,7 +1095,7 @@ function msgToHtml(m) {
     // 撤回的消息显示为系统消息样式
     if (m.is_revoked) {
         const text = isMine ? '你撤回了一条消息' : '对方撤回了一条消息';
-        return '<div class="msg-system">' + text + ' <span style="font-size:10px;color:#ccc;">' + time + '</span></div>';
+        return '<div class="msg-system">' + text + ' <span style="font-size:10px;color:var(--text-muted);">' + time + '</span></div>';
     }
 
     // 头像
@@ -1353,15 +1417,8 @@ function escAttr(s) {
 }
 
 function colorFromId(id) {
-    const colors = [
-        'linear-gradient(135deg, #667eea, #764ba2)',
-        'linear-gradient(135deg, #11998e, #38ef7d)',
-        'linear-gradient(135deg, #f093fb, #f5576c)',
-        'linear-gradient(135deg, #4facfe, #00f2fe)',
-        'linear-gradient(135deg, #fa709a, #fee140)',
-        'linear-gradient(135deg, #a18cd1, #fbc2eb)',
-    ];
-    return colors[id % colors.length];
+    // 使用主题 CSS 变量，支持换肤
+    return 'var(--avatar-' + (Math.abs(id) % 6) + ')';
 }
 
 // 根据头像 URL 返回 style 字符串 + text content

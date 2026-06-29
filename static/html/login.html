@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyChat - 登录</title>
+    <link rel="stylesheet" href="/static/css/themes.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -22,8 +23,8 @@
         }
         .container {
             position: relative; z-index: 1;
-            background: rgba(255,255,255,0.65); border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            background: var(--bg-secondary); border-radius: 16px;
+            box-shadow: var(--modal-shadow);
             padding: 44px 40px; width: 420px; max-width: 90vw;
             backdrop-filter: blur(4px);
             transform: translateX(-80px);
@@ -31,27 +32,29 @@
         @media (max-width: 800px) {
             .container { transform: none; }
         }
-        h1 { text-align: center; color: #333; margin-bottom: 24px; font-size: 22px; }
+        h1 { text-align: center; color: var(--text-primary); margin-bottom: 24px; font-size: 22px; }
         .form-group { margin-bottom: 18px; }
-        label { display: block; color: #555; font-size: 13px; margin-bottom: 4px; font-weight: 500; }
+        label { display: block; color: var(--text-secondary); font-size: 13px; margin-bottom: 4px; font-weight: 500; }
         input[type="email"] {
             width: 100%; padding: 10px 14px;
-            border: 2px solid #e0e0e0; border-radius: 8px;
+            border: 2px solid var(--border-input); border-radius: 8px;
             font-size: 15px; transition: border-color 0.3s, box-shadow 0.3s; outline: none;
+            background: var(--bg-input); color: var(--text-primary);
         }
-        input[type="email"]:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+        input[type="email"]:focus { border-color: var(--border-input-focus); box-shadow: 0 0 0 3px var(--accent-light); }
 
         .pwd-wrap { position: relative; }
         .pwd-wrap input {
             width: 100%; padding: 10px 44px 10px 14px;
-            border: 2px solid #e0e0e0; border-radius: 8px;
+            border: 2px solid var(--border-input); border-radius: 8px;
             font-size: 15px; transition: border-color 0.3s, box-shadow 0.3s; outline: none;
+            background: var(--bg-input); color: var(--text-primary);
         }
-        .pwd-wrap input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+        .pwd-wrap input:focus { border-color: var(--border-input-focus); box-shadow: 0 0 0 3px var(--accent-light); }
         .pwd-toggle {
             position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
             background: none; border: none; cursor: pointer; font-size: 18px;
-            padding: 4px 6px; color: #999; line-height: 1; user-select: none;
+            padding: 4px 6px; color: var(--text-muted); line-height: 1; user-select: none;
         }
         /* 密码可见时：在眼睛上画斜杠 */
         .pwd-toggle.showing::after {
@@ -59,12 +62,12 @@
             position: absolute;
             top: 50%; left: 50%;
             width: 22px; height: 2.5px;
-            background: #333;
+            background: var(--text-primary);
             transform: translate(-50%, -50%) rotate(-45deg);
             border-radius: 2px;
             pointer-events: none;
         }
-        .pwd-toggle:hover { color: #333; }
+        .pwd-toggle:hover { color: var(--text-primary); }
 
         /* 隐藏浏览器自带的密码显示按钮（Edge/IE） */
         .pwd-wrap input[type="password"]::-ms-reveal,
@@ -74,22 +77,22 @@
 
         button.submit-btn {
             width: 100%; padding: 13px; margin-top: 6px;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            color: white; border: none; border-radius: 8px;
+            background: var(--accent-gradient);
+            color: var(--text-inverse); border: none; border-radius: 8px;
             font-size: 15px; font-weight: 600; cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
         }
         button.submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(99,102,241,0.35); }
-        button.submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        button.submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
 
         .msg { text-align: center; padding: 10px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; display: none; }
         .msg.show { display: block; }
-        .msg.error { background: #fff5f5; color: #e53e3e; border: 1px solid #fed7d7; }
-        .msg.success { background: #f0fff4; color: #38a169; border: 1px solid #c6f6d5; }
-        .msg.info { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+        .msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+        .msg.success { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+        .msg.info { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border); }
 
-        .footer { text-align: center; color: #999; font-size: 13px; margin-top: 22px; }
-        .footer a { color: #6366f1; text-decoration: none; font-weight: 500; }
+        .footer { text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 22px; }
+        .footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -122,6 +125,14 @@
 </div>
 
 <script>
+// ═══════════════════════════════════════
+// 主题初始化（从 localStorage 读取）
+// ═══════════════════════════════════════
+(function initTheme() {
+    const theme = localStorage.getItem('chat_theme') || 'soft';
+    document.documentElement.setAttribute('data-theme', theme);
+})();
+
 // 密码显示/隐藏切换（隐藏时 👁，可见时 👁 加斜杠）
 function togglePwd() {
     const inp = document.getElementById('password');

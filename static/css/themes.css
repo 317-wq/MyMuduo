@@ -1,0 +1,321 @@
+/* ═══════════════════════════════════════════════════════
+   MyChat 主题系统 — 5 套预设配色
+   通过 <html data-theme="..."> 切换
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 默认柔和 · Soft ── */
+:root,
+[data-theme="soft"] {
+    --bg-primary:        #f3efe9;
+    --bg-secondary:      rgba(255, 252, 249, 0.94);
+    --bg-secondary-solid:#fefcf9;
+    --bg-tertiary:       #faf7f3;
+    --bg-hover:          rgba(139, 120, 180, 0.07);
+    --bg-active:         rgba(139, 120, 180, 0.13);
+    --bg-input:          #faf8f5;
+    --bg-modal:          #ffffff;
+    --bg-overlay:        rgba(60, 50, 70, 0.45);
+
+    --text-primary:      #3b3546;
+    --text-secondary:    #6a6278;
+    --text-muted:        #a098b2;
+    --text-inverse:      #ffffff;
+
+    --accent:            #8b78b8;
+    --accent-hover:      #7a68a8;
+    --accent-light:      rgba(139, 120, 180, 0.12);
+    --accent-gradient:   linear-gradient(135deg, #a08ecc 0%, #7c6ba8 100%);
+
+    --bubble-mine-bg:    linear-gradient(135deg, #a08ecc 0%, #7c6ba8 100%);
+    --bubble-mine-text:  #ffffff;
+    --bubble-theirs-bg:  #ece6f3;
+    --bubble-theirs-text:#3b3546;
+
+    --border:            rgba(0, 0, 0, 0.06);
+    --border-light:      rgba(0, 0, 0, 0.04);
+    --border-input:      #e0dbe8;
+    --border-input-focus:#8b78b8;
+
+    --shadow-sm:         0 1px 4px rgba(60, 50, 70, 0.06);
+    --shadow-md:         0 4px 16px rgba(60, 50, 70, 0.10);
+    --shadow-lg:         0 12px 40px rgba(60, 50, 70, 0.15);
+
+    --danger:            #d97070;
+    --danger-hover:      #c45a5a;
+    --danger-bg:         #fff5f5;
+    --danger-border:     #fcd7d7;
+    --success:           #60b078;
+    --success-bg:        #f0fdf4;
+    --success-border:    #c6f0d0;
+    --info:              #6b9fd4;
+    --info-bg:           #eff6ff;
+    --info-border:       #cfe0fa;
+
+    --online-dot:        #60b078;
+    --offline-dot:       #c8c0d8;
+    --badge-bg:          #d97070;
+    --badge-text:        #ffffff;
+
+    --toast-shadow:      0 4px 16px rgba(60, 50, 70, 0.12);
+    --modal-shadow:      0 20px 60px rgba(60, 50, 70, 0.25);
+
+    /* 头像渐变色（6 种，用于不同用户） */
+    --avatar-0: linear-gradient(135deg, #a08ecc, #7c6ba8);
+    --avatar-1: linear-gradient(135deg, #8cb8a0, #5a9870);
+    --avatar-2: linear-gradient(135deg, #e0a0a8, #c87080);
+    --avatar-3: linear-gradient(135deg, #80b0d8, #5888b8);
+    --avatar-4: linear-gradient(135deg, #e8c090, #d09860);
+    --avatar-5: linear-gradient(135deg, #b8a0d8, #9078b8);
+}
+
+/* ── 暖色 · Warm ── */
+[data-theme="warm"] {
+    --bg-primary:        #fef8f0;
+    --bg-secondary:      rgba(255, 252, 246, 0.94);
+    --bg-secondary-solid:#fffcf6;
+    --bg-tertiary:       #fdf6ed;
+    --bg-hover:          rgba(220, 140, 100, 0.08);
+    --bg-active:         rgba(220, 140, 100, 0.14);
+    --bg-input:          #fefaf5;
+    --bg-modal:          #ffffff;
+    --bg-overlay:        rgba(80, 40, 20, 0.40);
+
+    --text-primary:      #4a3028;
+    --text-secondary:    #7a5e50;
+    --text-muted:        #b89880;
+    --text-inverse:      #ffffff;
+
+    --accent:            #e08868;
+    --accent-hover:      #d07050;
+    --accent-light:      rgba(224, 136, 104, 0.12);
+    --accent-gradient:   linear-gradient(135deg, #f0a080 0%, #e07050 100%);
+
+    --bubble-mine-bg:    linear-gradient(135deg, #f0a080 0%, #e07050 100%);
+    --bubble-mine-text:  #ffffff;
+    --bubble-theirs-bg:  #fbe8dc;
+    --bubble-theirs-text:#4a3028;
+
+    --border:            rgba(0, 0, 0, 0.05);
+    --border-light:      rgba(0, 0, 0, 0.03);
+    --border-input:      #e8d5c8;
+    --border-input-focus:#e08868;
+
+    --shadow-sm:         0 1px 4px rgba(80, 40, 20, 0.06);
+    --shadow-md:         0 4px 16px rgba(80, 40, 20, 0.10);
+    --shadow-lg:         0 12px 40px rgba(80, 40, 20, 0.15);
+
+    --danger:            #d97070;
+    --danger-hover:      #c45a5a;
+    --danger-bg:         #fff5f5;
+    --danger-border:     #fcd7d7;
+    --success:           #60b078;
+    --success-bg:        #f0fdf4;
+    --success-border:    #c6f0d0;
+    --info:              #d49860;
+    --info-bg:           #fef8f2;
+    --info-border:       #f8e0c8;
+
+    --online-dot:        #60b078;
+    --offline-dot:       #e0c8b8;
+    --badge-bg:          #d97070;
+    --badge-text:        #ffffff;
+
+    --toast-shadow:      0 4px 16px rgba(80, 40, 20, 0.12);
+    --modal-shadow:      0 20px 60px rgba(80, 40, 20, 0.25);
+
+    --avatar-0: linear-gradient(135deg, #f0a080, #e07050);
+    --avatar-1: linear-gradient(135deg, #90c898, #60a068);
+    --avatar-2: linear-gradient(135deg, #e898a8, #d06878);
+    --avatar-3: linear-gradient(135deg, #80b0d8, #5888b8);
+    --avatar-4: linear-gradient(135deg, #d8b080, #b89058);
+    --avatar-5: linear-gradient(135deg, #c0a0d8, #9878b8);
+}
+
+/* ── 森林绿 · Forest ── */
+[data-theme="forest"] {
+    --bg-primary:        #eff5ed;
+    --bg-secondary:      rgba(248, 252, 246, 0.94);
+    --bg-secondary-solid:#f8fcf6;
+    --bg-tertiary:       #f4f9f2;
+    --bg-hover:          rgba(80, 150, 100, 0.07);
+    --bg-active:         rgba(80, 150, 100, 0.13);
+    --bg-input:          #f8fbf6;
+    --bg-modal:          #ffffff;
+    --bg-overlay:        rgba(30, 50, 30, 0.40);
+
+    --text-primary:      #2a3d2e;
+    --text-secondary:    #5a7058;
+    --text-muted:        #90a88c;
+    --text-inverse:      #ffffff;
+
+    --accent:            #5a9a68;
+    --accent-hover:      #4a8a58;
+    --accent-light:      rgba(90, 154, 104, 0.12);
+    --accent-gradient:   linear-gradient(135deg, #78b886 0%, #4a8a58 100%);
+
+    --bubble-mine-bg:    linear-gradient(135deg, #78b886 0%, #4a8a58 100%);
+    --bubble-mine-text:  #ffffff;
+    --bubble-theirs-bg:  #e0f0e2;
+    --bubble-theirs-text:#2a3d2e;
+
+    --border:            rgba(0, 0, 0, 0.05);
+    --border-light:      rgba(0, 0, 0, 0.03);
+    --border-input:      #d0e0ce;
+    --border-input-focus:#5a9a68;
+
+    --shadow-sm:         0 1px 4px rgba(30, 50, 30, 0.06);
+    --shadow-md:         0 4px 16px rgba(30, 50, 30, 0.10);
+    --shadow-lg:         0 12px 40px rgba(30, 50, 30, 0.15);
+
+    --danger:            #d97070;
+    --danger-hover:      #c45a5a;
+    --danger-bg:         #fff5f5;
+    --danger-border:     #fcd7d7;
+    --success:           #4a9a5a;
+    --success-bg:        #f0fdf4;
+    --success-border:    #c6f0d0;
+    --info:              #5a9a90;
+    --info-bg:           #effaf8;
+    --info-border:       #c8f0e8;
+
+    --online-dot:        #4a9a5a;
+    --offline-dot:       #c0d8be;
+    --badge-bg:          #d97070;
+    --badge-text:        #ffffff;
+
+    --toast-shadow:      0 4px 16px rgba(30, 50, 30, 0.12);
+    --modal-shadow:      0 20px 60px rgba(30, 50, 30, 0.25);
+
+    --avatar-0: linear-gradient(135deg, #78b886, #4a8a58);
+    --avatar-1: linear-gradient(135deg, #a0b888, #789860);
+    --avatar-2: linear-gradient(135deg, #e0a0a8, #c87080);
+    --avatar-3: linear-gradient(135deg, #80b0d0, #5888a8);
+    --avatar-4: linear-gradient(135deg, #d8b878, #b09050);
+    --avatar-5: linear-gradient(135deg, #98a8c8, #7080a8);
+}
+
+/* ── 海蓝 · Ocean ── */
+[data-theme="ocean"] {
+    --bg-primary:        #eff3f8;
+    --bg-secondary:      rgba(247, 250, 254, 0.94);
+    --bg-secondary-solid:#f7fafe;
+    --bg-tertiary:       #f3f7fc;
+    --bg-hover:          rgba(70, 130, 200, 0.07);
+    --bg-active:         rgba(70, 130, 200, 0.13);
+    --bg-input:          #f7fafd;
+    --bg-modal:          #ffffff;
+    --bg-overlay:        rgba(20, 40, 70, 0.42);
+
+    --text-primary:      #243448;
+    --text-secondary:    #506880;
+    --text-muted:        #8aa0b8;
+    --text-inverse:      #ffffff;
+
+    --accent:            #5a8ec0;
+    --accent-hover:      #4a7eb0;
+    --accent-light:      rgba(90, 142, 192, 0.12);
+    --accent-gradient:   linear-gradient(135deg, #78a8da 0%, #4a78b0 100%);
+
+    --bubble-mine-bg:    linear-gradient(135deg, #78a8da 0%, #4a78b0 100%);
+    --bubble-mine-text:  #ffffff;
+    --bubble-theirs-bg:  #dce8f4;
+    --bubble-theirs-text:#243448;
+
+    --border:            rgba(0, 0, 0, 0.05);
+    --border-light:      rgba(0, 0, 0, 0.03);
+    --border-input:      #d0dce8;
+    --border-input-focus:#5a8ec0;
+
+    --shadow-sm:         0 1px 4px rgba(20, 40, 70, 0.06);
+    --shadow-md:         0 4px 16px rgba(20, 40, 70, 0.10);
+    --shadow-lg:         0 12px 40px rgba(20, 40, 70, 0.15);
+
+    --danger:            #d97070;
+    --danger-hover:      #c45a5a;
+    --danger-bg:         #fff5f5;
+    --danger-border:     #fcd7d7;
+    --success:           #5098b0;
+    --success-bg:        #f0f8fc;
+    --success-border:    #c8e4f0;
+    --info:              #5a8ec0;
+    --info-bg:           #eff6fc;
+    --info-border:       #cfe0f4;
+
+    --online-dot:        #5098b0;
+    --offline-dot:       #c0d4e4;
+    --badge-bg:          #d97070;
+    --badge-text:        #ffffff;
+
+    --toast-shadow:      0 4px 16px rgba(20, 40, 70, 0.12);
+    --modal-shadow:      0 20px 60px rgba(20, 40, 70, 0.25);
+
+    --avatar-0: linear-gradient(135deg, #78a8da, #4a78b0);
+    --avatar-1: linear-gradient(135deg, #80b8a8, #509080);
+    --avatar-2: linear-gradient(135deg, #e098a8, #c86880);
+    --avatar-3: linear-gradient(135deg, #98b8d8, #6890b8);
+    --avatar-4: linear-gradient(135deg, #d8b880, #b09058);
+    --avatar-5: linear-gradient(135deg, #a898d0, #8070b0);
+}
+
+/* ── 暗色 · Dark ── */
+[data-theme="dark"] {
+    --bg-primary:        #1a1a24;
+    --bg-secondary:      rgba(30, 28, 40, 0.95);
+    --bg-secondary-solid:#1e1c28;
+    --bg-tertiary:       #242230;
+    --bg-hover:          rgba(160, 140, 210, 0.10);
+    --bg-active:         rgba(160, 140, 210, 0.18);
+    --bg-input:          #222030;
+    --bg-modal:          #282636;
+    --bg-overlay:        rgba(0, 0, 0, 0.60);
+
+    --text-primary:      #e8e4f0;
+    --text-secondary:    #b0a8c0;
+    --text-muted:        #706880;
+    --text-inverse:      #1a1a24;
+
+    --accent:            #a088d0;
+    --accent-hover:      #b098e0;
+    --accent-light:      rgba(160, 140, 210, 0.15);
+    --accent-gradient:   linear-gradient(135deg, #b098e0 0%, #9078c0 100%);
+
+    --bubble-mine-bg:    linear-gradient(135deg, #b098e0 0%, #9078c0 100%);
+    --bubble-mine-text:  #ffffff;
+    --bubble-theirs-bg:  #302e3e;
+    --bubble-theirs-text:#e8e4f0;
+
+    --border:            rgba(255, 255, 255, 0.06);
+    --border-light:      rgba(255, 255, 255, 0.04);
+    --border-input:      #383648;
+    --border-input-focus:#a088d0;
+
+    --shadow-sm:         0 1px 4px rgba(0, 0, 0, 0.20);
+    --shadow-md:         0 4px 16px rgba(0, 0, 0, 0.30);
+    --shadow-lg:         0 12px 40px rgba(0, 0, 0, 0.40);
+
+    --danger:            #e87070;
+    --danger-hover:      #f08080;
+    --danger-bg:         rgba(232, 112, 112, 0.12);
+    --danger-border:     rgba(232, 112, 112, 0.25);
+    --success:           #60c080;
+    --success-bg:        rgba(96, 192, 128, 0.10);
+    --success-border:    rgba(96, 192, 128, 0.20);
+    --info:              #70a8e0;
+    --info-bg:           rgba(112, 168, 224, 0.10);
+    --info-border:       rgba(112, 168, 224, 0.20);
+
+    --online-dot:        #60c080;
+    --offline-dot:       #484458;
+    --badge-bg:          #e87070;
+    --badge-text:        #ffffff;
+
+    --toast-shadow:      0 4px 16px rgba(0, 0, 0, 0.30);
+    --modal-shadow:      0 20px 60px rgba(0, 0, 0, 0.50);
+
+    --avatar-0: linear-gradient(135deg, #b098e0, #9078c0);
+    --avatar-1: linear-gradient(135deg, #80b898, #589870);
+    --avatar-2: linear-gradient(135deg, #e090a0, #c86878);
+    --avatar-3: linear-gradient(135deg, #78a8d8, #5080b0);
+    --avatar-4: linear-gradient(135deg, #d8a870, #b08050);
+    --avatar-5: linear-gradient(135deg, #a898d0, #8070b0);
+}
