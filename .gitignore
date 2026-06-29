@@ -85,3 +85,4 @@ CLAUDE.md
 config.ini
 compile_flags.txt
 .clangd
+docs/interview.md
