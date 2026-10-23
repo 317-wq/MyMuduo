@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(MyMuduo)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--copy-dt-needed-entries")
 
 # 生成 compile_commands.json，供 clangd/IDE 使用
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -21,8 +21,8 @@ include_directories(${JSONCPP_INCLUDE_DIRS})
 link_directories(${JSONCPP_LIBRARY_DIRS})
 
 # MySQL Connector/C++
-include_directories(/usr/include)
-link_directories(/usr/lib/x86_64-linux-gnu)
+include_directories(/usr/include /usr/local/include)
+link_directories(/usr/lib/x86_64-linux-gnu /usr/local/lib)
 
 # gtest
 find_package(GTest REQUIRED)
@@ -78,7 +78,6 @@ set(BASE_SRCS
 
 # 缓存层源文件
 set(CACHE_SRCS
-    src/cache/RedisPool.cpp
     src/cache/RedisCache.cpp
     src/cache/RedisDao.cpp
 )
@@ -119,62 +118,81 @@ target_link_libraries(test_proto
 #     curl
 # )
 
-# Redis 连接池测试 (gtest)
-# 只链接 RedisPool.cpp — 不需要 RedisCache（它依赖 EventLoop）
+# Redis 连接池测试（验证 redis++ 内置连接池）
 add_executable(test_redis_pool
     test/test_redis_pool.cpp
-    src/cache/RedisPool.cpp
 )
 target_link_libraries(test_redis_pool
     pthread
+    /usr/local/lib/libredis++.so
     hiredis
     GTest::Main
 )
 
-# Redis 异步执行器测试 (gtest)
-add_executable(test_redis_cache
-    test/test_redis_cache.cpp
-    ${CACHE_SRCS}
-    ${NET_SRCS}
-)
-target_link_libraries(test_redis_cache
-    pthread
-    hiredis
-    GTest::Main
-)
 
-# Redis DAO 数据访问层测试 (gtest) — 只用 RedisPool + RedisDao，不需要 RedisCache
+
+# Redis DAO 数据访问层测试 (gtest)
 add_executable(test_redis_dao
     test/test_redis_dao.cpp
-    src/cache/RedisPool.cpp
     src/cache/RedisDao.cpp
 )
 target_link_libraries(test_redis_dao
     pthread
+    /usr/local/lib/libredis++.so
     hiredis
     GTest::Main
 )
 
-# UserService + Redis 缓存集成测试 (gtest)
+# RedisCache 异步执行器测试
+add_executable(test_redis_cache
+    test/test_redis_cache.cpp
+    ${NET_SRCS}
+    src/cache/RedisCache.cpp
+)
+target_link_libraries(test_redis_cache
+    pthread
+    /usr/local/lib/libredis++.so
+    hiredis
+    GTest::Main
+)
+
+# 用户服务 + Redis 集成测试
 add_executable(test_user_service_redis
     test/test_user_service_redis.cpp
-    ${CACHE_SRCS}
-    ${DB_SRCS}
-    ${SERVICE_SRCS}
-    ${BASE_SRCS}
     ${NET_SRCS}
-    ${PROTO_SRCS}
+    ${DB_SRCS}
+    src/service/UserService.cpp
+    src/service/EmailSender.cpp
+    src/base/Crypto.cpp
+    src/cache/RedisCache.cpp
+    src/cache/RedisDao.cpp
 )
 target_link_libraries(test_user_service_redis
     pthread
-    hiredis
-    ${JSONCPP_LIBRARIES}
     mysqlcppconn
     crypto
     curl
+    /usr/local/lib/libredis++.so
+    hiredis
     GTest::Main
 )
 
+# 好友服务 + Redis 集成测试
+add_executable(test_friend_service
+    test/test_friend_service.cpp
+    ${NET_SRCS}
+    ${DB_SRCS}
+    src/service/FriendService.cpp
+    src/cache/RedisCache.cpp
+    src/cache/RedisDao.cpp
+)
+target_link_libraries(test_friend_service
+    pthread
+    mysqlcppconn
+    /usr/local/lib/libredis++.so
+    hiredis
+    GTest::Main
+)
 # 好友 DAO 测试 (gtest)
 add_executable(test_friend_dao
     test/test_friend_dao.cpp
@@ -187,29 +205,13 @@ target_link_libraries(test_friend_dao
     GTest::Main
 )
 
-# 好友服务层集成测试 (gtest)
-add_executable(test_friend_service
-    test/test_friend_service.cpp
-    ${DB_SRCS}
-    ${SERVICE_SRCS}
-    ${PROTO_SRCS}
-    ${BASE_SRCS}
-    ${CACHE_SRCS}
-    ${NET_SRCS}
-)
-target_link_libraries(test_friend_service
-    pthread
-    mysqlcppconn
-    hiredis
-    crypto
-    curl
-    ${JSONCPP_LIBRARIES}
-    GTest::Main
-)
-
 # 聊天室服务端
 add_executable(chat_server
     examples/chat_server/main.cpp
+    examples/chat_server/AppConfig.cpp
+    examples/chat_server/HttpUtils.cpp
+    examples/chat_server/HttpServer.cpp
+    examples/chat_server/HttpSelfTest.cpp
     ${NET_SRCS}
     ${PROTO_SRCS}
     ${DB_SRCS}
@@ -223,7 +225,7 @@ target_link_libraries(chat_server
     mysqlcppconn
     crypto
     curl
-    hiredis
+    /usr/local/lib/libredis++.so
 )
 
 # ============ 压测目标 ============
