@@ -7,7 +7,7 @@ void TcpConnection::HandleRead() {
     while (true){
         int n = recv(Fd(), buffer, sizeof(buffer) - 1, 0);
         if(n > 0){
-            // 信息输   入到接收缓冲区里面
+            // 信息输入到接收缓冲区里面
             _in_buffer.Append(buffer, n);
         }
         else if(n == 0){
@@ -151,7 +151,7 @@ void TcpConnection::SendInLoop(const std::string &str){
         _channel->EnableWrite();
 }
 
-// 设置TcpConnection层的上层业务回调
+// 设置TcpConnection层的上层业务回调[ChatServer设置]
 void TcpConnection::SetConnectCallback(ConnectCallback cb) { _connect_cb = std::move(cb); }
 void TcpConnection::SetMessageCallback(MessageCallback cb) { _message_cb = std::move(cb); }
 void TcpConnection::SetCloseCallback(CloseCallback cb) { _close_cb = std::move(cb); }
