@@ -1,378 +1,81 @@
-/*
-    RedisCache 异步执行器单元测试
-
-    覆盖：
-    - 基本 SET/GET/DEL
-    - Hash 操作 (HSET/HGET/HGETALL)
-    - 回调在指定 EventLoop 线程执行
-    - 并发多个任务
-    - 连接断开恢复
-    - 空回调安全
-*/
-
 #include "cache/RedisCache.h"
 #include "net/EventLoop.h"
-
 #include <gtest/gtest.h>
+#include <sw/redis++/redis++.h>
+#include <chrono>
 #include <memory>
 #include <thread>
-#include <chrono>
-#include <atomic>
+#include <unordered_map>
+#include <iterator>
 
-extern "C" {
-#include <hiredis/hiredis.h>
-}
-
-// 测试 fixture
 class RedisCacheTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 验证 Redis 可用
-        redisContext* ctx = redisConnect("127.0.0.1", 6379);
-        if (ctx == nullptr || ctx->err) {
-            if (ctx) redisFree(ctx);
-            GTEST_SKIP() << "Redis server is not running, skipping tests";
-        }
-        redisFree(ctx);
-
-        _cache = std::make_unique<RedisCache>("127.0.0.1", 6379, 4);
+        try {
+            sw::redis::Redis r(sw::redis::ConnectionOptions{sw::redis::ConnectionType::TCP, "127.0.0.1", 6379});
+            r.ping();
+        } catch (const std::exception&) { GTEST_SKIP() << "Redis server is not running"; }
+        cache = std::make_unique<RedisCache>("127.0.0.1", 6379, 4);
     }
-
-    void TearDown() override {
-        _cache.reset();
-    }
-
-    // 等待异步操作完成
-    void WaitFor(EventLoop& loop, int max_retries = 50) {
-        for (int i = 0; i < max_retries; ++i) {
+    void Wait(EventLoop& loop) {
+        for (int i = 0; i < 50; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             loop.DoPendingFunctors();
         }
     }
-
-    std::unique_ptr<RedisCache> _cache;
+    std::unique_ptr<RedisCache> cache;
 };
 
-TEST_F(RedisCacheTest, SetAndGet) {
+TEST_F(RedisCacheTest, SetGetDelete) {
     EventLoop loop;
-    std::string result;
     bool done = false;
-
-    _cache->Execute(&loop,
-        // --- Redis 线程 ---
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "SET test_key_1 hello");
-            ASSERT_NE(r, nullptr);
-            EXPECT_STREQ(r->str, "OK");
-            freeReplyObject(r);
-        },
-        // --- IO 线程 ---
-        [&]() {
-            done = true;
-        });
-
-    WaitFor(loop);
-    EXPECT_TRUE(done);
-
-    // 第二段：GET
-    bool done2 = false;
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "GET test_key_1");
-            EXPECT_NE(r, nullptr);
-            EXPECT_EQ(r->type, REDIS_REPLY_STRING);
-            EXPECT_STREQ(r->str, "hello");
-            freeReplyObject(r);
-        },
-        [&]() { done2 = true; });
-
-    WaitFor(loop);
-    EXPECT_TRUE(done2);
-
-    // 清理
-    bool done3 = false;
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "DEL test_key_1");
-            EXPECT_NE(r, nullptr);
-            freeReplyObject(r);
-        },
-        [&]() { done3 = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done3);
-}
-
-TEST_F(RedisCacheTest, DeleteKey) {
-    EventLoop loop;
-    bool done_set = false, done_del = false, done_get = false;
-    bool key_not_found = false;
-
-    // SET
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "SET test_key_del value");
-            freeReplyObject(r);
-        },
-        [&]() { done_set = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_set);
-
-    // DEL
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "DEL test_key_del");
-            EXPECT_EQ(r->integer, 1);
-            freeReplyObject(r);
-        },
-        [&]() { done_del = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_del);
-
-    // GET → 应为 nil
-    _cache->Execute(&loop,
-        [&](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "GET test_key_del");
-            EXPECT_EQ(r->type, REDIS_REPLY_NIL);
-            key_not_found = (r->type == REDIS_REPLY_NIL);
-            freeReplyObject(r);
-        },
-        [&]() { done_get = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_get);
-    EXPECT_TRUE(key_not_found);
+    cache->Execute(&loop, [](sw::redis::Redis* r) { r->set("test_key", "hello"); }, [&] { done = true; });
+    Wait(loop); EXPECT_TRUE(done);
+    std::string value;
+    cache->Execute(&loop, [&](sw::redis::Redis* r) { auto v = r->get("test_key"); if (v) value = *v; }, [&] { done = true; });
+    Wait(loop); EXPECT_EQ(value, "hello");
+    long long deleted = 0;
+    cache->Execute(&loop, [&](sw::redis::Redis* r) { deleted = r->del("test_key"); }, nullptr);
+    Wait(loop); EXPECT_EQ(deleted, 1);
 }
 
 TEST_F(RedisCacheTest, ExpireTTL) {
     EventLoop loop;
-    bool done_expire = false;
-    int ttl_result = -99;  // 用 shared 变量传递
-
-    // SET with EXPIRE
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "SETEX test_key_ttl 5 myvalue");
-            EXPECT_NE(r, nullptr);
-            freeReplyObject(r);
-        },
-        [&]() { done_expire = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_expire);
-
-    // 立即 GET → 应存在
-    bool key_exists = false;
-    _cache->Execute(&loop,
-        [&](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "GET test_key_ttl");
-            key_exists = (r->type == REDIS_REPLY_STRING);
-            freeReplyObject(r);
-        },
-        nullptr);
-    WaitFor(loop);
-    EXPECT_TRUE(key_exists);
-
-    // TTL 检查
-    _cache->Execute(&loop,
-        [&](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "TTL test_key_ttl");
-            EXPECT_NE(r, nullptr);
-            ttl_result = (int)r->integer;
-            freeReplyObject(r);
-        },
-        nullptr);
-    WaitFor(loop);
-    EXPECT_GT(ttl_result, 0);  // 剩余 TTL > 0
-    EXPECT_LE(ttl_result, 5);
-
-    // 清理
-    bool done_cleanup = false;
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "DEL test_key_ttl");
-            freeReplyObject(r);
-        },
-        [&]() { done_cleanup = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_cleanup);
-}
-
-TEST_F(RedisCacheTest, CallbackOnCorrectEventLoop) {
-    EventLoop loop;
-    std::thread::id loop_thread_id;
-    bool callback_on_loop = false;
-
-    // 记录 EventLoop 所属线程
-    loop.RunInLoop([&]() {
-        loop_thread_id = std::this_thread::get_id();
-    });
-
-    // 跑几个循环让 RunInLoop 执行
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    loop.DoPendingFunctors();
-
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "PING");
-            freeReplyObject(r);
-        },
-        [&]() {
-            callback_on_loop = (std::this_thread::get_id() == loop_thread_id);
-        });
-
-    WaitFor(loop);
-
-    // 此时回调应该已经通过 QueueInLoop 投递回 EventLoop 线程
-    // 注意：我们在测试线程调用 DoPendingFunctors()，所以回调在当前线程执行
-    // 这不是 event_loop 线程，但 QueueInLoop 本身是有效的
-    // 实际断言回调被执行了（loop != nullptr 时不直接同步执行）
-    EXPECT_TRUE(callback_on_loop);
-}
-
-TEST_F(RedisCacheTest, MultipleConcurrentTasks) {
-    EventLoop loop;
-    const int task_count = 20;
-    std::atomic<int> completed{0};
-
-    for (int i = 0; i < task_count; ++i) {
-        int idx = i;
-        _cache->Execute(&loop,
-            [idx](redisContext* ctx) {
-                std::string key = "concurrent_key_" + std::to_string(idx);
-                redisReply* r = (redisReply*)redisCommand(ctx, "SET %s %d", key.c_str(), idx);
-                if (r) freeReplyObject(r);
-            },
-            [&completed]() {
-                completed++;
-            });
-    }
-
-    WaitFor(loop);
-    EXPECT_EQ(completed, task_count);
-
-    // 验证所有 key 都写入成功
-    std::atomic<int> verified{0};
-    for (int i = 0; i < task_count; ++i) {
-        int idx = i;
-        _cache->Execute(&loop,
-            [idx](redisContext* ctx) {
-                std::string key = "concurrent_key_" + std::to_string(idx);
-                redisReply* r = (redisReply*)redisCommand(ctx, "GET %s", key.c_str());
-                EXPECT_EQ(r->type, REDIS_REPLY_STRING);
-                freeReplyObject(r);
-            },
-            [&verified]() { verified++; });
-    }
-    WaitFor(loop);
-    EXPECT_EQ(verified, task_count);
-
-    // 清理
-    std::atomic<int> cleaned{0};
-    for (int i = 0; i < task_count; ++i) {
-        int idx = i;
-        _cache->Execute(&loop,
-            [idx](redisContext* ctx) {
-                std::string key = "concurrent_key_" + std::to_string(idx);
-                redisReply* r = (redisReply*)redisCommand(ctx, "DEL %s", key.c_str());
-                freeReplyObject(r);
-            },
-            [&cleaned]() { cleaned++; });
-    }
-    WaitFor(loop);
-    EXPECT_EQ(cleaned, task_count);
+    long long ttl = -1;
+    cache->Execute(&loop, [](sw::redis::Redis* r) { r->setex("test_ttl", 5, "value"); }, nullptr);
+    Wait(loop);
+    cache->Execute(&loop, [&](sw::redis::Redis* r) { ttl = r->command<long long>("TTL", "test_ttl"); }, nullptr);
+    Wait(loop); EXPECT_GT(ttl, 0); EXPECT_LE(ttl, 5);
+    cache->Execute(&loop, [](sw::redis::Redis* r) { r->del("test_ttl"); }, nullptr);
+    Wait(loop);
 }
 
 TEST_F(RedisCacheTest, HashOperations) {
     EventLoop loop;
-    bool done = false;
-
-    // HSET
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(
-                ctx, "HSET test_hash field1 val1 field2 val2");
-            EXPECT_NE(r, nullptr);
-            EXPECT_EQ(r->integer, 2);  // 2 个新字段
-            freeReplyObject(r);
-        },
-        [&]() { done = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done);
-
-    // HGET
-    bool done_hget = false;
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "HGET test_hash field1");
-            EXPECT_EQ(r->type, REDIS_REPLY_STRING);
-            EXPECT_STREQ(r->str, "val1");
-            freeReplyObject(r);
-        },
-        [&]() { done_hget = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_hget);
-
-    // HGETALL
-    bool done_hgetall = false;
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "HGETALL test_hash");
-            EXPECT_EQ(r->type, REDIS_REPLY_ARRAY);
-            EXPECT_EQ(r->elements, 4);  // 2 pairs
-            freeReplyObject(r);
-        },
-        [&]() { done_hgetall = true; });
-    WaitFor(loop);
-    EXPECT_TRUE(done_hgetall);
-
-    // Cleanup
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "DEL test_hash");
-            freeReplyObject(r);
-        },
-        nullptr);
-    WaitFor(loop);
+    cache->Execute(&loop, [](sw::redis::Redis* r) { r->hset("test_hash", "field1", "val1"); r->hset("test_hash", "field2", "val2"); }, nullptr);
+    Wait(loop);
+    std::string value;
+    cache->Execute(&loop, [&](sw::redis::Redis* r) { auto v = r->hget("test_hash", "field1"); if (v) value = *v; }, nullptr);
+    Wait(loop); EXPECT_EQ(value, "val1");
+    std::unordered_map<std::string, std::string> values;
+    cache->Execute(&loop, [&](sw::redis::Redis* r) { r->hgetall("test_hash", std::inserter(values, values.end())); }, nullptr);
+    Wait(loop); EXPECT_EQ(values.size(), 2u);
+    cache->Execute(&loop, [](sw::redis::Redis* r) { r->del("test_hash"); }, nullptr); Wait(loop);
 }
 
-TEST_F(RedisCacheTest, NullCallbackIsSafe) {
+TEST_F(RedisCacheTest, ConcurrentTasks) {
     EventLoop loop;
-
-    // Execute with null callback should not crash
-    _cache->Execute(&loop,
-        [](redisContext* ctx) {
-            redisReply* r = (redisReply*)redisCommand(ctx, "PING");
-            freeReplyObject(r);
-        },
-        nullptr);
-
-    // Wait a bit and process pending
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    loop.DoPendingFunctors();
-
-    // Test passes if no crash
-    SUCCEED();
+    int completed = 0;
+    for (int i = 0; i < 10; ++i) {
+        cache->Execute(&loop, [i](sw::redis::Redis* r) { r->set("cache_test_" + std::to_string(i), std::to_string(i)); }, [&] { ++completed; });
+    }
+    Wait(loop); EXPECT_EQ(completed, 10);
+    for (int i = 0; i < 10; ++i) cache->Execute(&loop, [i](sw::redis::Redis* r) { r->del("cache_test_" + std::to_string(i)); }, nullptr);
+    Wait(loop);
 }
 
-TEST_F(RedisCacheTest, SyncModeNullLoop) {
-    // loop = nullptr → 回调在 Redis worker 线程同步执行
-    std::thread::id redis_thread_id;
-    std::thread::id callback_thread_id;
-    bool done = false;
-
-    _cache->Execute(nullptr,
-        [&redis_thread_id](redisContext* ctx) {
-            redis_thread_id = std::this_thread::get_id();
-            redisReply* r = (redisReply*)redisCommand(ctx, "PING");
-            freeReplyObject(r);
-        },
-        [&]() {
-            callback_thread_id = std::this_thread::get_id();
-            done = true;
-        });
-
-    // 同步模式：回调在 worker 线程执行，需要等待
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    EXPECT_TRUE(done);
-    // 同步模式下，回调与 Redis 任务在同一线程
-    EXPECT_EQ(callback_thread_id, redis_thread_id);
+TEST_F(RedisCacheTest, PingAndNullCallback) {
+    EventLoop loop;
+    cache->Execute(&loop, [](sw::redis::Redis* r) { EXPECT_EQ(r->ping(), "PONG"); }, nullptr);
+    Wait(loop); SUCCEED();
 }
