@@ -91,6 +91,7 @@ void ChatServer::Start()
 
     g_server = this;
 
+    // 这个 Database 和 RedisCache 都是生产消费模型，多线程+连接池+任务队列的放肆
     // 1. 初始化数据库（如果尚未由外部设置）
     if (!_db) {
         _db = std::make_unique<Database>(
@@ -126,7 +127,7 @@ void ChatServer::Start()
         _base_loop, static_cast<uint16_t>(_server_port),
         _thread_num, _timeout);
 
-    // 4. 设置连接回调
+    // 4. 设置连接回调[就是tcpserver通知TcpConnection来处理这个连接，对其进行管理和设置]
     _server->SetConnectCallback(
         [this](const TcpConnection::Ptr& conn) {
             OnConnection(conn);
@@ -243,7 +244,7 @@ void ChatServer::OnConnection(const TcpConnection::Ptr& conn)
             }
             if (_redis) {
                 _redis->Execute(nullptr,
-                    [user_id](redisContext* ctx) {
+                    [user_id](sw::redis::Redis* ctx) {
                         RedisDao::SetUserOffline(ctx, user_id);
                     },
                     nullptr);
@@ -405,7 +406,7 @@ void ChatServer::SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn)
     // Redis 在线状态
     if (_redis) {
         _redis->Execute(nullptr,
-            [user_id](redisContext* ctx) {
+            [user_id](sw::redis::Redis* ctx) {
                 RedisDao::SetUserOnline(ctx, user_id, 180);  // 3 分钟
             },
             nullptr);
@@ -431,7 +432,7 @@ void ChatServer::SetUserOffline(uint32_t user_id)
     // Redis 离线
     if (_redis) {
         _redis->Execute(nullptr,
-            [user_id](redisContext* ctx) {
+            [user_id](sw::redis::Redis* ctx) {
                 RedisDao::SetUserOffline(ctx, user_id);
             },
             nullptr);
@@ -685,6 +686,6 @@ void ChatServer::OnPrivateMessage(const TcpConnection::Ptr& conn,
 
 void ChatServer::SendMessage(const TcpConnection::Ptr& conn, const Message& msg)
 {
-    std::string encoded = _codec.Encode(msg);
+    std::string encoded = _codec.Encode(msg); // 序列化传输
     conn->Send(encoded);
 }
