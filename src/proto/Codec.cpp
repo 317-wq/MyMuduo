@@ -12,6 +12,7 @@
 
 Codec::Codec() = default;
 
+// 序列化
 std::string Codec::Encode(const Message& msg) {
     std::string json_body = msg.ToJsonString();
 
