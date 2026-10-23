@@ -27,7 +27,7 @@ TcpServer::TcpServer(EventLoop *base_loop, u16 port, size_t thread_num, size_t t
     ,_acceptor(std::make_unique<Acceptor>(base_loop, port))
     ,_time_wheel(std::make_unique<TimeWheel>(base_loop, timeout))
     {
-        // 预留一个fd参数位
+        // 预留一个fd参数位，非静态成员函数绑定的时候需要加this
         _time_wheel->SetTimeoutCallback(std::bind(&TcpServer::HandleTimeout, this, ph::_1));
     }
 
