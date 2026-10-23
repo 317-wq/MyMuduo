@@ -23,12 +23,16 @@ bool FriendDao::SearchUserByEmail(sql::Connection* conn,
 
     // 构造模糊匹配关键词（前后加 %）
     std::string pattern = "%" + keyword + "%";
+    // 将参数放到对应数字的?处
     stmt->setString(1, pattern);
     stmt->setUInt(2, exclude_user_id);
 
+    // 执行sql，返回结果集
     std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    // 逐行执行
     while (rs->next()) {
         UserInfo u;
+        // 获取数据
         u.id         = rs->getUInt("id");
         u.email      = rs->getString("email");
         u.username   = rs->getString("username");
@@ -45,8 +49,8 @@ bool FriendDao::SearchUserByEmail(sql::Connection* conn,
 
 bool FriendDao::SendFriendRequest(sql::Connection* conn,
                                   uint32_t from_id, uint32_t to_id,
-                                  uint32_t& out_request_id,
-                                  bool& out_auto_accepted)
+                                  uint32_t& out_request_id, // 记录谁发送的请求，后续可以进行修改
+                                  bool& out_auto_accepted) // 是否之前对方已经申请添加过了
 {
     out_auto_accepted = false;
 
@@ -59,7 +63,7 @@ bool FriendDao::SendFriendRequest(sql::Connection* conn,
         stmt->setUInt(1, from_id);
         stmt->setUInt(2, to_id);
         std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
-        if (rs->next() && rs->getInt(1) > 0) {
+        if (rs->next() && rs->getInt(1) > 0) { // 取列序号[第一列]
             return false;  // 已是好友
         }
     }
@@ -227,6 +231,7 @@ bool FriendDao::DeleteFriend(sql::Connection* conn,
     stmt->setUInt(2, friend_id);
     stmt->setUInt(3, friend_id);
     stmt->setUInt(4, user_id);
+    // 返回受影响行数
     return stmt->executeUpdate() > 0;
 }
 
