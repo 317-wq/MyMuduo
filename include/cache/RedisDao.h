@@ -1,132 +1,98 @@
 #pragma once
 
-/*
-    Redis 数据访问对象 (Data Access Object)
-
-    所有方法都是同步的，接收 redisContext*，
-    由调用者通过 RedisCache::Execute 在 Redis worker 线程执行。
-
-    Key 命名规范：
-    - 用户信息 Hash:   user:info:<id>
-    - 邮箱映射 String:  user:email:<email>
-    - 验证码 String:    code:<type>:<email>
-    - 在线状态 String:  online:<user_id>
-*/
-
 #include "db/UserDao.h"
 
-extern "C" {
-#include <hiredis/hiredis.h>
-}
+#include <sw/redis++/redis++.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
 
+// RedisDao 封装用户、好友、验证码和在线状态相关的缓存操作。
 class RedisDao {
 public:
-    // ============================================================
-    // 用户信息缓存（Hash）
-    // ============================================================
+    // 将用户信息写入 Redis 哈希缓存。
+    static bool CacheUserInfo(sw::redis::Redis* redis, const UserInfo& user);
 
-    // 将 UserInfo 写入 Redis Hash
-    // Key: user:info:<id>
-    // Fields: email, username, password, salt, avatar, created_at
-    static bool CacheUserInfo(redisContext* ctx, const UserInfo& user);
+    // 从 Redis 哈希缓存读取用户信息。
+    static bool GetCachedUserInfo(sw::redis::Redis* redis,
+                                  uint32_t user_id,
+                                  UserInfo& user);
 
-    // 从 Redis Hash 读取 UserInfo
-    // 返回 true 表示命中，false 表示未命中或出错
-    static bool GetCachedUserInfo(redisContext* ctx, uint32_t user_id, UserInfo& out);
+    // 删除指定用户的信息缓存。
+    static bool InvalidateUserCache(sw::redis::Redis* redis, uint32_t user_id);
 
-    // 失效用户缓存（DELETE key）
-    static bool InvalidateUserCache(redisContext* ctx, uint32_t user_id);
+    // 写入邮箱到用户 ID 的缓存映射。
+    static bool CacheEmailMapping(sw::redis::Redis* redis,
+                                  const std::string& email,
+                                  uint32_t user_id);
 
-    // ============================================================
-    // 邮箱 → 用户 ID 映射（String）
-    // ============================================================
+    // 根据邮箱读取用户 ID。
+    static bool GetUserIdByEmail(sw::redis::Redis* redis,
+                                 const std::string& email,
+                                 uint32_t& user_id);
 
-    // 设置邮箱到 ID 的映射
-    // Key: user:email:<email>  Value: user_id (string)
-    static bool CacheEmailMapping(redisContext* ctx, const std::string& email, uint32_t user_id);
+    // 删除邮箱到用户 ID 的缓存映射。
+    static bool InvalidateEmailMapping(sw::redis::Redis* redis,
+                                       const std::string& email);
 
-    // 根据邮箱获取用户 ID
-    // 返回 true 表示命中，false 表示未命中
-    static bool GetUserIdByEmail(redisContext* ctx, const std::string& email, uint32_t& out_id);
+    // 写入带过期时间的验证码。
+    static bool SetVerificationCode(sw::redis::Redis* redis,
+                                    const std::string& email,
+                                    int type,
+                                    const std::string& code,
+                                    int ttl_seconds);
 
-    // 失效邮箱映射
-    static bool InvalidateEmailMapping(redisContext* ctx, const std::string& email);
+    // 读取并删除验证码，保证验证码只能消费一次。
+    static bool GetAndConsumeVerificationCode(sw::redis::Redis* redis,
+                                               const std::string& email,
+                                               int type,
+                                               std::string& code);
 
-    // ============================================================
-    // 验证码（String + TTL）
-    // ============================================================
+    // 设置用户在线状态，并设置状态过期时间。
+    static bool SetUserOnline(sw::redis::Redis* redis,
+                              uint32_t user_id,
+                              int ttl_seconds);
 
-    // 设置验证码（自动过期）
-    // Key: code:<type>:<email>  Value: code, TTL: expire_seconds
-    // type: 1=注册, 2=重置密码
-    static bool SetVerificationCode(redisContext* ctx, const std::string& email,
-                                    int type, const std::string& code, int expire_seconds);
+    // 判断用户是否处于在线状态。
+    static bool IsUserOnline(sw::redis::Redis* redis, uint32_t user_id);
 
-    // 获取并消耗验证码（验证成功后立即删除）
-    // 返回 true 表示验证码匹配且成功删除
-    static bool GetAndConsumeVerificationCode(redisContext* ctx, const std::string& email,
-                                              int type, std::string& out_code);
+    // 删除用户在线状态。
+    static bool SetUserOffline(sw::redis::Redis* redis, uint32_t user_id);
 
-    // ============================================================
-    // 在线状态（String + TTL）
-    // ============================================================
+    // 读取用户的好友 ID 集合。
+    static bool GetFriendIdSet(sw::redis::Redis* redis,
+                               uint32_t user_id,
+                               std::vector<uint32_t>& friend_ids);
 
-    // 设置用户在线
-    // Key: online:<user_id>  Value: "1", TTL: ttl_seconds
-    static bool SetUserOnline(redisContext* ctx, uint32_t user_id, int ttl_seconds);
+    // 重建用户好友 ID 集合，并设置缓存过期时间。
+    static bool CacheFriendIdSet(sw::redis::Redis* redis,
+                                 uint32_t user_id,
+                                 const std::vector<uint32_t>& friend_ids,
+                                 int ttl_seconds);
 
-    // 检查用户是否在线
-    static bool IsUserOnline(redisContext* ctx, uint32_t user_id);
+    // 向用户好友集合中添加好友。
+    static bool AddFriendToSet(sw::redis::Redis* redis,
+                               uint32_t user_id,
+                               uint32_t friend_id);
 
-    // 设置用户离线
-    static bool SetUserOffline(redisContext* ctx, uint32_t user_id);
+    // 从用户好友集合中删除好友。
+    static bool RemoveFriendFromSet(sw::redis::Redis* redis,
+                                    uint32_t user_id,
+                                    uint32_t friend_id);
 
-    // ============================================================
-    // 好友列表缓存（Set）
-    // ============================================================
+    // 判断指定用户是否在好友集合中。
+    static bool IsInFriendSet(sw::redis::Redis* redis,
+                              uint32_t user_id,
+                              uint32_t friend_id);
 
-    // Set: friend:list:<user_id> → {friend_id, friend_id, ...}
-    // 获取好友 ID 集合
-    static bool GetFriendIdSet(redisContext* ctx, uint32_t user_id,
-                               std::vector<uint32_t>& out_friend_ids);
-
-    // 缓存好友 ID 集合（批量 SADD + EXPIRE）
-    static bool CacheFriendIdSet(redisContext* ctx, uint32_t user_id,
-                                 const std::vector<uint32_t>& friend_ids, int ttl_seconds);
-
-    // 添加一个好友到集合
-    static bool AddFriendToSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
-
-    // 从集合移除一个好友
-    static bool RemoveFriendFromSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
-
-    // 判断是否为好友（集合中存在）
-    static bool IsInFriendSet(redisContext* ctx, uint32_t user_id, uint32_t friend_id);
-
-    // ============================================================
-    // 搜索历史（List，最近 6 条）
-    // ============================================================
-
-    // List: search:history:<user_id>
-    // 添加一条搜索记录（LPUSH + LTRIM 保留最近 6 条）
-    static bool AddSearchHistory(redisContext* ctx, uint32_t user_id,
+    // 将关键词加入用户搜索历史，并限制历史记录长度。
+    static bool AddSearchHistory(sw::redis::Redis* redis,
+                                 uint32_t user_id,
                                  const std::string& keyword);
 
-    // 获取搜索历史（LRANGE 0 5）
-    static bool GetSearchHistory(redisContext* ctx, uint32_t user_id,
-                                 std::vector<std::string>& out);
-
-private:
-    // 工具：构造带前缀的 key
-    static std::string MakeUserInfoKey(uint32_t user_id);
-    static std::string MakeEmailKey(const std::string& email);
-    static std::string MakeCodeKey(int type, const std::string& email);
-    static std::string MakeOnlineKey(uint32_t user_id);
-
-    // 工具：检查 reply 状态
-    static bool IsReplyOK(redisReply* reply);
+    // 读取用户最近的搜索历史。
+    static bool GetSearchHistory(sw::redis::Redis* redis,
+                                 uint32_t user_id,
+                                 std::vector<std::string>& history);
 };
