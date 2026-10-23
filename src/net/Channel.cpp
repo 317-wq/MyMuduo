@@ -22,12 +22,12 @@ void Channel::SetCloseCallback(Channel::EventCallback close_cb) { _close_cb = st
 void Channel::SetEventCallback(Channel::EventCallback event_cb) { _event_cb = std::move(event_cb); }
 
 void Channel::EnableRead() { 
-    _events |= EPOLLIN;
+    _events |= (EPOLLIN | EPOLLET);   // 补上 EPOLLET：边沿触发模式
     Update();
 }
 
 void Channel::EnableWrite() {
-    _events |= EPOLLOUT;
+    _events |= (EPOLLOUT | EPOLLET);  // 补上 EPOLLET：边沿触发模式
     Update();
 }
 
