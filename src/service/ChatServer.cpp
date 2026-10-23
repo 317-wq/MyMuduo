@@ -133,19 +133,25 @@ void ChatServer::Start()
             OnConnection(conn);
         });
 
-    // 5. 设置消息回调（TcpServer → Codec）
+    // 5. 设置连接关闭通知（底层 close 回调仍由 TcpServer 维护）
+    _server->SetCloseNotifyCallback(
+        [this](const TcpConnection::Ptr& conn) {
+            OnConnectionClosed(conn);
+        });
+
+    // 6. 设置消息回调（TcpServer → Codec）
     _server->SetMessageCallback(
         [this](const TcpConnection::Ptr& conn, Buffer* buf) {
             OnRawMessage(conn, buf);
         });
 
-    // 6. Codec → Dispatcher
+    // 7. Codec → Dispatcher
     _codec.SetMessageCallback(
         [this](const TcpConnection::Ptr& conn, Message::Ptr msg) {
             _dispatcher.Dispatch(conn, std::move(msg), Timestamp::Now());
         });
 
-    // 7. 注册 Dispatcher 处理器
+    // 8. 注册 Dispatcher 处理器
     _dispatcher.Register(MessageType::kSendCodeRequest,
         [this](auto& conn, auto msg, auto ts) {
             OnSendCode(conn, std::move(msg), ts);
@@ -195,7 +201,7 @@ void ChatServer::Start()
             OnPrivateMessage(conn, std::move(msg), ts);
         });
 
-    // 8. 启动 TcpServer
+    // 9. 启动 TcpServer
     _server->Start();
     LOG_INFO("ChatServer started on port %d", _server_port);
 
@@ -224,34 +230,35 @@ void ChatServer::Stop()
 void ChatServer::OnConnection(const TcpConnection::Ptr& conn)
 {
     LOG_INFO("New connection: fd=%d", conn->Fd());
+}
 
-    // 连接关闭时清理 fd→user_id 映射和在线状态
-    conn->SetCloseCallback([this](const TcpConnection::Ptr& c) {
-        int fd = c->Fd();
-        uint32_t user_id = 0;
+// 连接关闭后由 TcpServer 在 base_loop 中回调，清理 fd→user_id 映射和在线状态。
+void ChatServer::OnConnectionClosed(const TcpConnection::Ptr& conn)
+{
+    int fd = conn->Fd();
+    uint32_t user_id = 0;
+    {
+        std::lock_guard<std::mutex> lock(_fd_mutex);
+        auto it = _fd_to_user_id.find(fd);
+        if (it != _fd_to_user_id.end()) {
+            user_id = it->second;
+            _fd_to_user_id.erase(it);
+        }
+    }
+    if (user_id > 0) {
         {
-            std::lock_guard<std::mutex> lock(_fd_mutex);
-            auto it = _fd_to_user_id.find(fd);
-            if (it != _fd_to_user_id.end()) {
-                user_id = it->second;
-                _fd_to_user_id.erase(it);
-            }
+            std::lock_guard<std::mutex> lock(_online_mutex);
+            _online_users.erase(user_id);
         }
-        if (user_id > 0) {
-            {
-                std::lock_guard<std::mutex> lock(_online_mutex);
-                _online_users.erase(user_id);
-            }
-            if (_redis) {
-                _redis->Execute(nullptr,
-                    [user_id](sw::redis::Redis* ctx) {
-                        RedisDao::SetUserOffline(ctx, user_id);
-                    },
-                    nullptr);
-            }
+        if (_redis) {
+            _redis->Execute(nullptr,
+                [user_id](sw::redis::Redis* ctx) {
+                    RedisDao::SetUserOffline(ctx, user_id);
+                },
+                nullptr);
         }
-        LOG_INFO("Connection closed: fd=%d user_id=%u", fd, user_id);
-    });
+    }
+    LOG_INFO("Connection closed: fd=%d user_id=%u", fd, user_id);
 }
 
 void ChatServer::OnRawMessage(const TcpConnection::Ptr& conn, Buffer* buf)
