@@ -69,6 +69,8 @@ private:
 
     // ---------- TcpServer 回调 ----------
     void OnConnection(const TcpConnection::Ptr& conn);
+    // 连接关闭后由 TcpServer 回调，清理在线状态。
+    void OnConnectionClosed(const TcpConnection::Ptr& conn);
     void OnRawMessage(const TcpConnection::Ptr& conn, Buffer* buf);
 
     // ---------- Dispatcher 处理器 ----------
