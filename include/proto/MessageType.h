@@ -33,12 +33,16 @@ enum class MessageType : uint16_t {
     // 好友相关
     kSearchUserRequest = 40,
     kSearchUserResponse = 41,
+
     kAddFriendRequest = 42,
     kAddFriendResponse = 43,
+
     kAcceptFriendRequest = 44,
     kAcceptFriendResponse = 45,
+
     kDeleteFriendRequest = 46,
     kDeleteFriendResponse = 47,
+    
     kFriendListRequest = 48,
     kFriendListResponse = 49,
 
