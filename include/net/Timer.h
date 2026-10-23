@@ -16,7 +16,7 @@
 class Timer{
 public:
     using Callback = std::function<void()>; // 回调函数
-    using Clock = std::chrono::steady_clock; // 稳定计时器
+    using Clock = std::chrono::steady_clock; // 稳定计时器 
     using TimePoint = Clock::time_point; // 时间点
     using Duration = std::chrono::milliseconds; // 时间间隔ms级
 
