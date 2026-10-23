@@ -19,6 +19,7 @@
 #include <vector>
 #include <cstdint>
 
+// 抽象类
 class Message {
 public:
     using Ptr = std::shared_ptr<Message>;
