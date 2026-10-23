@@ -11,6 +11,8 @@
 
 // one thread one loop
 
+// 管理多个连接对象以及连接任务等
+
 class TcpServer{
 public:
     using u16 = uint16_t;
@@ -53,7 +55,7 @@ private:
 public:
     TcpServer(EventLoop* base_loop, u16 port, size_t thread_num, size_t timeout);
 
-    // 上层设置
+    // 上层设置[chatserver设置，实际的业务层]
     void SetMessageCallback(MessageCallback cb);
 
     void SetConnectCallback(ConnectCallback cb); 
