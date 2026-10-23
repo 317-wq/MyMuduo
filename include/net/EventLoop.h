@@ -10,6 +10,8 @@
 
 class TimerQueue;
 
+// one thread one loop：一个线程跑一个loop，一个loop里面管理多个连接
+
 class EventLoop{
 public:
     using Ptr = std::shared_ptr<EventLoop>;
