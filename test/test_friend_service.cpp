@@ -18,7 +18,7 @@
 
 #include <gtest/gtest.h>
 #include <thread>
-#include <chrono>
+#include <sw/redis++/redis++.h>
 
 static const std::string DB_HOST = "127.0.0.1";
 static const int DB_PORT = 3306;
@@ -41,14 +41,12 @@ static std::string MakeTestEmail(const std::string& prefix) {
 class FriendServiceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 检查 Redis
-        {
-            redisContext* ctx = redisConnect("127.0.0.1", 6379);
-            if (ctx == nullptr || ctx->err) {
-                if (ctx) redisFree(ctx);
-                GTEST_SKIP() << "Redis not available";
-            }
-            redisFree(ctx);
+        try {
+            sw::redis::Redis ctx(sw::redis::ConnectionOptions{
+                sw::redis::ConnectionType::TCP, "127.0.0.1", 6379});
+            ctx.ping();
+        } catch (const std::exception&) {
+            GTEST_SKIP() << "Redis not available";
         }
 
         _db = std::make_unique<Database>(DB_HOST, DB_PORT,
