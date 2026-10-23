@@ -16,7 +16,7 @@ bool Socket::Bind(const InetAddress &addr) {
 
 bool Socket::Bind(Socket::u16 port){
     InetAddress local(port);
-    return bind(_fd, local.Addr(), local.Length());
+    return bind(_fd, local.Addr(), local.Length()) >= 0;
 }
 
 // 监听连接
@@ -25,20 +25,20 @@ bool Socket::Listen(int backlog) {
 }
 
 // 获取新连接 -> 输出型参数
+// 返回 -1 表示队列已空（EAGAIN）或发生错误；调用方用 errno 区分。
 int Socket::Accept(InetAddress *client) {
     while(true){
-        // socklen_t len = client->Length();
         socklen_t len = sizeof(sockaddr_in);
         int fd = accept(_fd, client->Addr(), &len);
 
         if(fd >= 0)
             return fd; // 合法
         
-        // fd = -1的时候，不一定是错误，在非阻塞环境下
+        // fd = -1 的时候，不一定是错误，在非阻塞环境下
         if(errno == EINTR)
             continue; // 信号中断。重试
         if(errno == EAGAIN || errno == EWOULDBLOCK)
-            return 0; // 现在没有新连接
+            return -1; // 现在没有新连接，调用方据此结束 accept 循环
         
         return -1; // 错误
     }
@@ -47,7 +47,7 @@ int Socket::Accept(InetAddress *client) {
 int Socket::Accept(std::string *client_ip, Socket::u16 *client_port) {
     InetAddress client;
     int fd = Accept(&client);
-    if(fd > 0){
+    if(fd >= 0){
         // 合法的连接
         if(client_ip) *client_ip = client.Ip();
         if(client_port) *client_port = client.Port();
