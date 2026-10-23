@@ -1,32 +1,39 @@
 #include "net/TcpConnection.h"
 #include "net/EventLoop.h"
 
-// 读事件绑定
+#include <cerrno>
+#include <sys/socket.h>
+
+// 读事件绑定：ET 模式下循环 recv 到 EAGAIN；读到 0 时先把已读数据分发完再关闭。
 void TcpConnection::HandleRead() {
     char buffer[4096];
+    bool peer_closed = false;
+
     while (true){
-        int n = recv(Fd(), buffer, sizeof(buffer) - 1, 0);
+        ssize_t n = recv(Fd(), buffer, sizeof(buffer) - 1, 0);
         if(n > 0){
             // 信息输入到接收缓冲区里面
             _in_buffer.Append(buffer, n);
+            continue;
         }
-        else if(n == 0){
-            HandleClose();
-            return;
+        if(n == 0){
+            // 对端半关闭：先记下，等缓冲区里的最后一批数据分发完再关闭。
+            peer_closed = true;
+            break;
         }
-        else{
-            if(errno == EWOULDBLOCK || errno == EAGAIN)
-                break;
-            HandleError();
-            return;
-        }
+        if(errno == EWOULDBLOCK || errno == EAGAIN)
+            break;
+        HandleError();
+        return;
     }
 
-    // std::cout << "echo@ " << buffer;
-    // TcpServer上层处理inbuffer里的数据
-    if(_message_cb){
-        _message_cb(shared_from_this(), &_in_buffer);
-        return;
+    // self 保证分发和后续关闭期间连接对象不会被析构。
+    auto self = shared_from_this();
+    if(_message_cb && _in_buffer.ReadableSize() > 0){
+        _message_cb(self, &_in_buffer);
+    }
+    if(peer_closed){
+        HandleClose();
     }
 }
 
@@ -45,31 +52,34 @@ bool TcpConnection::DisConnected() const {
     return _state == DISCONNECTED;
 }
 
-// 写事件绑定
+// 写事件绑定：ET 模式下必须循环 send 到 EAGAIN，否则部分写后不会再收到 EPOLLOUT。
 void TcpConnection::HandleWrite() {
-    ssize_t readable = _out_buffer.ReadableSize();
-    if(readable == 0){
+    if(_out_buffer.ReadableSize() == 0){
         _channel->DisableWrite();
-        return;
-    }
-    
-    ssize_t n = send(Fd(), _out_buffer.Peek(), readable, 0);
-    if(n < 0){
-        if(errno == EWOULDBLOCK || errno == EAGAIN)
-            return;
-        HandleError();
-        return;
-    }
-    if(n == 0){
-        HandleClose();
         return;
     }
 
-    // 取出固定长度的字节数
-    _out_buffer.Retrieve(n);
-    // 此时发送缓冲区里面没有数据要发送，关闭写事件监听
-    if(_out_buffer.ReadableSize() == 0)
-        _channel->DisableWrite();
+    while (_out_buffer.ReadableSize() > 0) {
+        ssize_t n = send(Fd(), _out_buffer.Peek(), _out_buffer.ReadableSize(), MSG_NOSIGNAL);
+        if(n > 0){
+            // 消费已发送的字节，继续尝试发送剩余数据
+            _out_buffer.Retrieve(n);
+            continue;
+        }
+        if(n < 0 && (errno == EWOULDBLOCK || errno == EAGAIN)){
+            // 内核发送缓冲区已满，保留 EPOLLOUT 监听，等下一次可写事件
+            return;
+        }
+        if(n == 0){
+            HandleClose();
+            return;
+        }
+        HandleError();
+        return;
+    }
+
+    // 此时 out_buffer 已清空，关闭写事件监听
+    _channel->DisableWrite();
 }
 
 // 关闭连接事件绑定
