@@ -1,5 +1,7 @@
 #include "net/Log.h"
 
+#include <system_error>
+
 // 获取日志等级
 std::string Log::GetLogLevel(LogLevel level) const{
     switch(level){
@@ -40,41 +42,45 @@ void Log::PrintScreen(const std::string& msg){
 
 // 输出到文件
 void Log::PrintFile(const std::string& msg){
-    std::unique_lock<std::mutex> lock(_mtx);
+    bool written = false;
+    {
+        std::unique_lock<std::mutex> lock(_mtx);
 
-    std::ofstream file(_filepath,std::ios::app);
+        std::ofstream file(_filepath,std::ios::app);
 
-    if(file.is_open()){
-        file << msg << std::endl;
-
-        file.close();
+        if(file.is_open()){
+            file << msg << std::endl;
+            written = true;
+        }
     }
-    else{
+
+    if(!written){
         std::cerr << "ERROR: Failed to open log file: " << _filepath << std::endl;
 
-        // 不要exit，至少输出到屏幕
-
+        // 先释放日志锁，再回退到屏幕输出，避免递归加锁造成死锁。
         PrintScreen(msg);
     }
 }
 
 void Log::CreateDir(){
+    const std::filesystem::path filepath(_filepath);
+    const std::filesystem::path parent = filepath.parent_path();
 
-    // 如果path带目录的话
-    // 先创建目录
-
-    size_t pos = _filepath.find_last_of('/');
-
-    if(pos != std::string::npos){
-
-        std::string dir = _filepath.substr(0,pos);
-
-        std::filesystem::create_directories(dir);
+    if(!parent.empty()){
+        std::error_code error;
+        std::filesystem::create_directories(parent,error);
+        if(error){
+            std::cerr << "ERROR: Failed to create log directory: "
+                      << parent << ": " << error.message() << std::endl;
+            return;
+        }
     }
 
-    std::ofstream file(_filepath,std::ios::app);
-
-    file.close();
+    // 以追加方式打开可在日志文件不存在时创建文件。
+    std::ofstream file(filepath,std::ios::app);
+    if(!file.is_open()){
+        std::cerr << "ERROR: Failed to create log file: " << _filepath << std::endl;
+    }
 }
 
 Log::Log(const int& mode,const std::string& filepath)
@@ -113,18 +119,15 @@ void Log::Message(
     va_list args;
 
     // 指向format的指针
-
     va_start(args,format);
 
     // 初始化va_list
     // 指向第一个可变参数
-
     vsnprintf(buffer,sizeof buffer,format,args);
 
     va_end(args);
 
     // 结束访问
-
     std::string msg =
         "[" + mlevel +
         "][" + mtime +
@@ -134,7 +137,6 @@ void Log::Message(
         std::string(buffer);
 
     // 看_mode是输出到哪里
-
     if(_mode & TO_SCREEN)
         PrintScreen(msg);
 
