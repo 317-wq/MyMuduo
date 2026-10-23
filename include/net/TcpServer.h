@@ -5,6 +5,8 @@
 #include "net/Acceptor.h"
 #include "net/TcpConnection.h"
 #include "net/TimeWheel.h"
+#include <atomic>
+#include <cstddef>
 #include <memory>
 #include <functional>
 #include <unordered_map>
@@ -19,6 +21,8 @@ public:
     using ConnectCallback = std::function<void(const TcpConnection::Ptr &)>; // 连接事件回调
     // 消息事件回调 -> 回调自身函数，对下层传输过来的数据进行处理
     using MessageCallback = std::function<void(const TcpConnection::Ptr &, Buffer *)>;
+    // 连接关闭通知，在移除连接后由 base_loop 调用，业务层不应覆盖底层 close 回调
+    using CloseNotifyCallback = std::function<void(const TcpConnection::Ptr &)>;
 
 private:
     EventLoop* _base_loop; // 事件循环-主线程
@@ -28,7 +32,9 @@ private:
     std::unordered_map<int, TcpConnection::Ptr> _connections;
     ConnectCallback _connect_cb; // 通知上层连接到来
     MessageCallback _message_cb; // 通知上层有数据
+    CloseNotifyCallback _close_notify_cb; // 通知上层连接已关闭
     std::unique_ptr<TimeWheel> _time_wheel;
+    std::atomic<size_t> _connection_count{0}; // 当前连接数，供监控和测试读取
 
 private:
     // 连接是否存在
@@ -58,7 +64,16 @@ public:
     // 上层设置[chatserver设置，实际的业务层]
     void SetMessageCallback(MessageCallback cb);
 
-    void SetConnectCallback(ConnectCallback cb); 
+    void SetConnectCallback(ConnectCallback cb);
+
+    // 设置连接关闭通知；底层 close 回调仍由 TcpServer 自己维护。
+    void SetCloseNotifyCallback(CloseNotifyCallback cb);
+
+    // 当前连接数（测试与监控用）。
+    size_t ConnectionCount() const { return _connection_count.load(); }
+
+    // 实际监听端口（构造时传 0 时由内核分配）。
+    u16 Port() const { return _acceptor->Port(); }
 
     // 运行
     void Start();
