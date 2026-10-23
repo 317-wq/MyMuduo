@@ -20,7 +20,7 @@ private:
     NewConnectCallback _new_connection_cb; // 新连接事件回调，通知上层
 
 private:
-    // 绑定读回调
+    // 监听 fd 可读时循环 accept，直到队列为空（ET 模式必须排空）。
     void HandleRead();
 
 public:
@@ -28,12 +28,15 @@ public:
     Acceptor(EventLoop* loop, const InetAddress &local, bool non_block = true);
     Acceptor(EventLoop* loop, u16 port, bool non_block = true);
 
-    // 返回新连接的文件描述符fd
+    // 返回新连接的文件描述符fd；无连接或出错返回 -1。
     int Accept(InetAddress *client);
     int Accept(std::string *client_ip, u16 *client_port);
 
     // 获取监听socket的fd
     int Fd() const;
+
+    // 获取实际监听端口（构造时传 0 时由内核分配）。
+    u16 Port() const;
 
     // 开始监听
     void Listen();
