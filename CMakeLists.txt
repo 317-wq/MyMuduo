@@ -101,6 +101,16 @@ target_link_libraries(test_proto
     GTest::Main
 )
 
+# TCP 连接生命周期回归测试（B01-B04）
+add_executable(test_tcp_lifecycle
+    test/test_tcp_lifecycle.cpp
+    ${NET_SRCS}
+)
+target_link_libraries(test_tcp_lifecycle
+    pthread
+    GTest::Main
+)
+
 # 数据库 + 用户服务集成测试
 # add_executable(test_db
 #     test/test_db.cpp
