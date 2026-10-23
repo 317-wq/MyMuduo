@@ -18,7 +18,8 @@ private:
     int _fd;
 private:
     using u16 = uint16_t;
-    static const int BACK_LOG = 10; // 最大连接数量 [C++98 规定的整形类内常量初始化是允许的，其他类型需要使用constexpr]
+    // 监听队列长度，需容纳突发建连，避免 SYN 被丢弃。
+    static const int BACK_LOG = 128;
 
 public:
     using Ptr = std::shared_ptr<Socket>;
@@ -37,7 +38,7 @@ public:
     // 监听连接
     bool Listen(int backlog = BACK_LOG);
 
-    // 获取新连接
+    // 获取新连接；无连接或出错返回 -1，errno == EAGAIN 表示队列已空。
     int Accept(InetAddress *client);
     int Accept(std::string *client_ip, Socket::u16 *client_port);
 
