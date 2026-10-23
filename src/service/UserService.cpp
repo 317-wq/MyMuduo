@@ -41,7 +41,7 @@ void UserService::SendVerificationCode(const std::string& email,
 
     _redis->Execute(_loop,
         // --- Redis 线程 ---
-        [email, code, type, email_cfg, result](redisContext* ctx) {
+        [email, code, type, email_cfg, result](sw::redis::Redis* ctx) {
             if (!RedisDao::SetVerificationCode(ctx, email, type, code, 300)) {
                 result->error_code = 1;
                 result->msg = "验证码存储失败";
@@ -124,7 +124,7 @@ void UserService::RegisterWithCode(const std::string& email,
 
     // Step 1: 从 Redis 验证验证码
     _redis->Execute(_loop,
-        [email, code, result](redisContext* ctx) {
+        [email, code, result](sw::redis::Redis* ctx) {
             std::string stored_code;
             if (!RedisDao::GetAndConsumeVerificationCode(ctx, email, 1, stored_code)) {
                 result->error_code = 1;
@@ -179,7 +179,7 @@ void UserService::RegisterWithCode(const std::string& email,
                         // 简化：这里不做额外查询，注册完成后 Login 会自动缓存
                         // 但可以先缓存 email → id 映射
                         _redis->Execute(nullptr,
-                            [email, user_id = result->user_id](redisContext* ctx) {
+                            [email, user_id = result->user_id](sw::redis::Redis* ctx) {
                                 RedisDao::CacheEmailMapping(ctx, email, user_id);
                             },
                             nullptr);
@@ -268,7 +268,7 @@ void UserService::Login(const std::string& email,
 
     // Step 1: 尝试从 Redis 缓存获取
     _redis->Execute(loop,
-        [email, user, login_result](redisContext* ctx) {
+        [email, user, login_result](sw::redis::Redis* ctx) {
             uint32_t uid = 0;
             if (RedisDao::GetUserIdByEmail(ctx, email, uid) &&
                 RedisDao::GetCachedUserInfo(ctx, uid, *user)) {
@@ -313,7 +313,7 @@ void UserService::Login(const std::string& email,
                 [this, user, login_result, callback = std::move(callback)]() {
                     if (login_result->error_code == 0 && _redis) {
                         _redis->Execute(nullptr,
-                            [user](redisContext* ctx) {
+                            [user](sw::redis::Redis* ctx) {
                                 RedisDao::CacheUserInfo(ctx, *user);
                                 RedisDao::CacheEmailMapping(ctx, user->email, user->id);
                             },
