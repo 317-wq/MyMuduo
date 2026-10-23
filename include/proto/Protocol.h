@@ -32,7 +32,7 @@ struct ProtocolHeader {
 
     ProtocolHeader() : body_length(0), msg_type(0) {}
 
-    // 编码为网络字节序的 6 字节数据
+    // 编码为网络字节序的 6 字节数据 (将主机序转换成网络字节序)
     std::string Encode() const {
         uint32_t net_len = htonl(body_length);
         uint16_t net_type = htons(msg_type);
@@ -42,7 +42,7 @@ struct ProtocolHeader {
         return result;
     }
 
-    // 从网络字节序的原始数据解码
+    // 从网络字节序的原始数据解码 (将网络字节序转换成主机序)
     // 返回 true 表示解码成功，false 表示数据不足
     static bool Decode(const char* data, size_t len, ProtocolHeader& header) {
         if (len < kHeaderSize)
