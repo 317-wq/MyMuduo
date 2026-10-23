@@ -11,7 +11,7 @@
 // ============================================================
 
 std::string Message::ToJsonString() const {
-    Json::Value root = ToJson();
+    Json::Value root = ToJson(); // 也是运行时多态，需要注册对应的type
     Json::StreamWriterBuilder builder;
     builder["emitUTF8"] = true;
     builder["indentation"] = "";  // 紧凑输出
@@ -26,7 +26,7 @@ bool Message::FromJsonString(const std::string& json_str) {
     if (!Json::parseFromStream(builder, iss, &root, &errs)) {
         return false;
     }
-    return FromJson(root);
+    return FromJson(root); // 运行时多态
 }
 
 // 工厂方法
