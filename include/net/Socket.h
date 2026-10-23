@@ -18,7 +18,7 @@ private:
     int _fd;
 private:
     using u16 = uint16_t;
-    static const int BACK_LOG = 10; // 最大连接数量
+    static const int BACK_LOG = 10; // 最大连接数量 [C++98 规定的整形类内常量初始化是允许的，其他类型需要使用constexpr]
 
 public:
     using Ptr = std::shared_ptr<Socket>;
