@@ -6,7 +6,7 @@
 | 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **0 / 10** |
+| 进度 | **4 / 10** |
 
 ## 0. 版本约定
 
@@ -25,33 +25,33 @@
 
 ### P0 · 连接与生命周期
 
-- [ ] **B01 连接关闭回调被覆盖**
+- [x] **B01 连接关闭回调被覆盖**（完成：2026-10-23）
   - 现象：TCP 客户端断开后 `_connections` 与 fd 不立即释放，要等约 60s 时间轮超时；RST 时可能反复触发 HUP。
   - 发现：对照 `TcpServer::AddConnection`（`src/net/TcpServer.cpp:58`）与 `ConnectEstablished` 的回调顺序，发现 `ChatServer::OnConnection`（`src/service/ChatServer.cpp:229`）二次设置了 close 回调。用 `nc` 连上再断开，观察 `/proc/<pid>/fd` 数量不回落。
   - 根因：`TcpConnection` 只有一个 `_close_cb`；业务层覆盖了 `TcpServer::RemoveConnection`，正常关闭路径不再做 map/时间轮清理。
   - 修复：`TcpServer` 新增 `SetCloseNotifyCallback`，在 `RemoveConnectionInLoop` 中通知业务；业务只清在线状态，不再碰 close_cb。最小改动可保存旧回调并链式调用。
-  - 验证：新增 `ConnectCloseTest`：连接→关闭→1s 内连接数归零、fd 数回落；RST 场景 CPU 不升高。
+  - 验证：新增 `TcpLifecycleTest.ConnectThenCloseReleasesConnection`：连接→关闭→2s 内连接数归零、fd 数回落；RST 场景 CPU 不升高。
 
-- [ ] **B02 ET 下 accept 只取一次，且把 0 当合法 fd**
+- [x] **B02 ET 下 accept 只取一次，且把 0 当合法 fd**（完成：2026-10-23）
   - 现象：并发建连时部分连接迟迟不被 accept；极端情况下 fd 0 被当成连接。
   - 发现：`Channel::EnableRead` 设置了 `EPOLLET`（`src/net/Channel.cpp:25`），但 `Acceptor::HandleRead` 只 accept 一次；对照 Muduo 的 while-accept 写法。另查 `Socket::Accept` 在 EAGAIN 时返回 0（`src/net/Socket.cpp:41`）。
   - 根因：ET 下必须一次把 accept 队列排空；`0` 与 `-1` 语义混用，`connfd < 0` 漏判 0。
-  - 修复：`HandleRead` 循环 accept 到 EAGAIN；`Socket::Accept` 统一用 `-1 + errno` 表示无连接/错误，或新增 `WouldBlock()`；`Acceptor` 判断 `<= 0`。
-  - 验证：并发 100 连接全部 accepted；fd 0 不进入 epoll。
+  - 修复：`HandleRead` 循环 accept 到 EAGAIN；`Socket::Accept` 在 EAGAIN 时统一返回 `-1`；`Acceptor` 以 `< 0` 结束循环；`BACK_LOG` 10→128 以承受突发建连。
+  - 验证：新增 `TcpLifecycleTest.BurstConnectionsAreAllAccepted`：并发 100 连接全部 accepted；fd 0 不进入 epoll。
 
-- [ ] **B03 ET 下 `HandleWrite` 只 send 一次，部分写会卡住**
+- [x] **B03 ET 下 `HandleWrite` 只 send 一次，部分写会卡住**（完成：2026-10-23）
   - 现象：大响应或慢客户端时，`_out_buffer` 还有数据但不再发送，连接像卡住。
   - 发现：ET 语义 + `TcpConnection::HandleWrite` 只调用一次 `send`（`src/net/TcpConnection.cpp:56`）；用小 `SO_SNDBUF` + 不读的客户端可复现。
   - 根因：一次 `send` 可能只写一部分；socket 仍可写但 ET 不会再次通知 EPOLLOUT。
   - 修复：`while` 循环 send 直到 EAGAIN 或 buffer 空，再 `DisableWrite`。
-  - 验证：发送 1MB 响应，客户端延迟读取，最终收到的字节数一致。
+  - 验证：新增 `TcpLifecycleTest.PartialWriteDrainsOutBuffer`：发送 8MB 响应，客户端延迟读取，最终字节数一致。
 
-- [ ] **B04 半关闭丢最后一批数据**
+- [x] **B04 半关闭丢最后一批数据**（完成：2026-10-23）
   - 现象：客户端 `send` 后立即 `close`，服务端可能收不到最后一条消息。
   - 发现：读 `HandleRead` 的 `n==0` 分支（`src/net/TcpConnection.cpp:13-15`），发现它在 `_message_cb` 之前 return。
   - 根因：半关闭时先把连接关掉，`_in_buffer` 里已收到的数据没有分发。
   - 修复：读到 0 先 break，分发 buffer，再 `HandleClose()`；或用 `pending_close` 标记延迟关闭。
-  - 验证：客户端发一帧后 `shutdown(SHUT_WR)`，服务端 handler 收到该帧后才关闭。
+  - 验证：新增 `TcpLifecycleTest.SendThenHalfCloseDeliversBufferedData`：客户端发 64KB 后 `shutdown(SHUT_WR)`，服务端 handler 收到后才关闭。
 
 - [ ] **B05 HTTP 服务无法优雅退出**
   - 现象：Ctrl-C / SIGTERM 后进程不退出，卡在 `http_thread.join()`。
@@ -127,5 +127,5 @@
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 0/10 |
+| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 4/10 |
 | v1.1 | 待定 | 业务统一 + WebSocket + 群聊 | 未开始 |
