@@ -44,6 +44,10 @@ void TcpServer::SetConnectCallback(ConnectCallback cb){
     _connect_cb = std::move(cb);
 }
 
+void TcpServer::SetCloseNotifyCallback(CloseNotifyCallback cb){
+    _close_notify_cb = std::move(cb);
+}
+
 // 增加新连接 -> 实际做事
 void TcpServer::AddConnection(int fd){
     // 在this的当前事件循环里面[这个直接由主线程构造连接是单线程版本]
@@ -58,6 +62,7 @@ void TcpServer::AddConnection(int fd){
     conn->SetCloseCallback(std::bind(&TcpServer::RemoveConnection, this, ph::_1));
 
     _connections[fd] = conn;
+    _connection_count.fetch_add(1, std::memory_order_relaxed);
     // 建立连接，回调函数，通知上层连接建立完成，转交后续执行
     /*
         ConnectEstablished函数内部，有注册读事件，操作epoll
@@ -81,6 +86,12 @@ void TcpServer::RemoveConnectionInLoop(const TcpConnection::Ptr &conn){
     if(!ExistConnection(fd)) return;
     _time_wheel->Remove(fd);
     _connections.erase(fd);
+    _connection_count.fetch_sub(1, std::memory_order_relaxed);
+
+    // 先把关闭事件通知业务层，再由连接所属的 io_loop 释放 epoll/fd。
+    if (_close_notify_cb) {
+        _close_notify_cb(conn);
+    }
 
     // 把 epoll 操作分发到连接归属的 io_loop 执行
     EventLoop* io_loop = conn->GetLoop();
@@ -125,6 +136,7 @@ TcpServer::~TcpServer(){
         conns.push_back(pair.second);
     }
     _connections.clear();
+    _connection_count.store(0);
 
     // 3. 分发 ConnectDestroyed 到各 worker 线程
     for (auto &conn : conns){
