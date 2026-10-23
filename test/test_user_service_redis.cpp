@@ -24,7 +24,7 @@
 #include <atomic>
 
 extern "C" {
-#include <hiredis/hiredis.h>
+#include <sw/redis++/redis++.h>
 }
 
 // 测试配置
@@ -45,14 +45,12 @@ static void WaitForLoop(EventLoop& loop, int max_retries = 100) {
 class UserServiceRedisTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 检查 Redis
-        {
-            redisContext* ctx = redisConnect("127.0.0.1", 6379);
-            if (ctx == nullptr || ctx->err) {
-                if (ctx) redisFree(ctx);
-                GTEST_SKIP() << "Redis not available, skipping tests";
-            }
-            redisFree(ctx);
+        try {
+            sw::redis::Redis ctx(sw::redis::ConnectionOptions{
+                sw::redis::ConnectionType::TCP, "127.0.0.1", 6379});
+            ctx.ping();
+        } catch (const std::exception&) {
+            GTEST_SKIP() << "Redis not available, skipping tests";
         }
 
         _db = std::make_unique<Database>(DB_HOST, DB_PORT,
@@ -100,11 +98,10 @@ TEST_F(UserServiceRedisTest, SendVerificationCodeToRedis) {
     // 验证验证码已写入 Redis
     bool code_exists = false;
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             std::string key = "code:1:" + _test_email;
-            redisReply* r = (redisReply*)redisCommand(ctx, "GET %s", key.c_str());
-            code_exists = (r && r->type == REDIS_REPLY_STRING);
-            if (r) freeReplyObject(r);
+            auto value = ctx->get(key);
+            code_exists = value.has_value();
         },
         [&]() {});
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -118,7 +115,7 @@ TEST_F(UserServiceRedisTest, RegisterAndLoginWithRedisCache) {
 
     // 手动设置验证码到 Redis（跳过邮件发送）
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, verification_code, 300);
         },
         [&]() { send_done = true; });
@@ -186,7 +183,7 @@ TEST_F(UserServiceRedisTest, RegisterAndLoginWithRedisCache) {
 
     // 清理
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::InvalidateUserCache(ctx, user_id);
             RedisDao::InvalidateEmailMapping(ctx, _test_email);
         },
@@ -197,7 +194,7 @@ TEST_F(UserServiceRedisTest, RegisterAndLoginWithRedisCache) {
 TEST_F(UserServiceRedisTest, RegisterWithWrongCode) {
     // 设置验证码
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, "999999", 300);
         },
         nullptr);
@@ -222,7 +219,7 @@ TEST_F(UserServiceRedisTest, RegisterWithWrongCode) {
 TEST_F(UserServiceRedisTest, LoginWithWrongPassword) {
     // 先注册
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, "111111", 300);
         },
         nullptr);
@@ -251,7 +248,7 @@ TEST_F(UserServiceRedisTest, LoginWithWrongPassword) {
 TEST_F(UserServiceRedisTest, ExpiredVerificationCode) {
     // 设置 1 秒过期的验证码
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, "expired_code", 1);
         },
         nullptr);
@@ -277,7 +274,7 @@ TEST_F(UserServiceRedisTest, ExpiredVerificationCode) {
 TEST_F(UserServiceRedisTest, OverwriteVerificationCode) {
     // 先设置一个码
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, "first_code", 300);
         },
         nullptr);
@@ -285,7 +282,7 @@ TEST_F(UserServiceRedisTest, OverwriteVerificationCode) {
 
     // 再覆盖新码
     _redis->Execute(nullptr,
-        [&](redisContext* ctx) {
+        [&](sw::redis::Redis* ctx) {
             RedisDao::SetVerificationCode(ctx, _test_email, 1, "second_code", 300);
         },
         nullptr);
