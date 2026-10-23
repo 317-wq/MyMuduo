@@ -1,15 +1,19 @@
 #include "net/Acceptor.h"
+#include <sys/socket.h>
 #include <iostream>
 
-// 监听读事件，有新连接到来通知上层
+// 监听读事件：ET 模式下必须一次把 accept 队列排空，否则剩余连接可能等不到下一次边沿。
 void Acceptor::HandleRead(){
     InetAddress client;
-    int connfd = Accept(&client);
-    if(connfd < 0)
-        return;
-    // 通知上层创建连接
-    if(_new_connection_cb)
-        _new_connection_cb(connfd);
+    for (;;) {
+        int connfd = Accept(&client);
+        if (connfd < 0) {
+            break;
+        }
+        // 通知上层创建连接
+        if (_new_connection_cb)
+            _new_connection_cb(connfd);
+    }
 }
 
 // 初始化监听对象
@@ -44,6 +48,15 @@ int Acceptor::Accept(std::string *client_ip, Acceptor::u16 *client_port){
 // 获取监听socket的fd
 int Acceptor::Fd() const { 
     return _listen_sock->Fd(); 
+}
+
+// 获取内核实际分配的监听端口，便于测试和日志展示。
+Acceptor::u16 Acceptor::Port() const {
+    sockaddr_in addr{};
+    socklen_t len = sizeof(addr);
+    if (getsockname(_listen_sock->Fd(), reinterpret_cast<sockaddr*>(&addr), &len) < 0)
+        return 0;
+    return ntohs(addr.sin_port);
 }
 
 // 绑定创建回调
