@@ -182,7 +182,7 @@ void FriendService::GetFriendList(uint32_t user_id, FriendListCallback callback)
 
     // Step 1: 查 Redis 缓存
     _redis->Execute(_loop,
-        [user_id, friend_infos, cache_hit](redisContext* ctx) {
+        [user_id, friend_infos, cache_hit](sw::redis::Redis* ctx) {
             std::vector<uint32_t> friend_ids;
             if (RedisDao::GetFriendIdSet(ctx, user_id, friend_ids) && !friend_ids.empty()) {
                 // 逐个获取好友信息 + 在线状态
@@ -236,7 +236,7 @@ void FriendService::GetFriendListFromMySQL(uint32_t user_id, FriendListCallback 
                     friend_ids.push_back(f.friend_id);
                 }
                 _redis->Execute(nullptr,
-                    [user_id, friend_ids](redisContext* ctx) {
+                    [user_id, friend_ids](sw::redis::Redis* ctx) {
                         RedisDao::CacheFriendIdSet(ctx, user_id, friend_ids, 600);
                     },
                     nullptr);
@@ -274,7 +274,7 @@ void FriendService::UpdateFriendCacheBoth(uint32_t user_a, uint32_t user_b, bool
     if (!_redis) return;
 
     _redis->Execute(nullptr,
-        [user_a, user_b, add](redisContext* ctx) {
+        [user_a, user_b, add](sw::redis::Redis* ctx) {
             if (add) {
                 RedisDao::AddFriendToSet(ctx, user_a, user_b);
                 RedisDao::AddFriendToSet(ctx, user_b, user_a);
