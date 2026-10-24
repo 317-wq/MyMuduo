@@ -6,7 +6,7 @@
 | 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **7 / 8（主线；B07/B08 暂缓）** |
+| 进度 | **8 / 8（主线完成；B07/B08 暂缓）** |
 
 ## 0. 版本约定
 
@@ -96,40 +96,41 @@
   - 修复：`_base_loop` 改为 `std::unique_ptr<EventLoop>`；`TimeWheel` 校验 `timeout > 0` 并抛出 `std::invalid_argument`；`Acceptor` 的 Bind/Listen 失败抛 `std::runtime_error`；`Acceptor` 只保留 `SO_REUSEADDR`，移除 `SO_REUSEPORT`；`main` 捕获启动异常并返回非 0。
   - 验证：`test_server_boundaries` 3/3；进程级第二个 `chat_server` 退出码 1 并打印 `bind failed on port 8888`；`timeout=0` 退出码 1 并打印 `TimeWheel timeout must be greater than 0`；ASan 留到 B10/CI 统一跑。
 
-- [ ] **B10 测试接入 CTest + README 纠偏**
-  - 现象：`ctest` 显示 0 个测试；README 的 `sql/init.sql`、`config.ini.example`、`./test_proto` 36 用例与仓库不符。
-  - 发现：`ctest -N`；逐条对照 README 与实际目录。
-  - 根因：CMake 未 `enable_testing()/add_test`；文档未随重构更新。
-  - 修复：加 `enable_testing()` + `add_test`（test_proto、test_tcp_integration、test_http_auth；依赖 MySQL/Redis 的用 label 标 optional）；README 修正路径、测试数、Redis++、HTTP 8080、TCP 实验状态。
-  - 验证：`ctest --output-on-failure` 全绿；按 README 从零构建可跑。
+- [x] **B10 测试接入 CTest + README 纠偏**（完成：2026-10-24）
+  - 现象：`ctest` 显示 0 个测试；README 的 `sql/init.sql`、`config.ini.example`、`./test_proto` 36 用例、RedisPool、群聊/撤回等描述与仓库不符。
+  - 发现：`ctest -N`；逐条对照 README、`docs/architecture.md`、`docs/db.md` 与实际目录/实现。
+  - 根因：CMake 未 `enable_testing()/add_test`；文档停留在重构前（RedisPool、HTTP/群聊功能、测试数量）。
+  - 修复：接入 `enable_testing` + `add_test`（proto/tcp_lifecycle/server_boundaries）；新增 `config.ini.example`；README 改为 TCP 服务端主线 + HTTP demo 冻结，修正依赖/路径/测试/限制；architecture/db 标注 RedisPool 已移除、保留历史章节。
+  - 验证：`ctest --output-on-failure` 3/3 通过；按 README 从仓库根目录启动/SIGTERM 退出正常；`config.ini.example` 可复制使用。
 
 ## 3. 修复顺序
 
-1. B01–B04：网络层一起改，跑新的 TCP 集成测试（建议分支 `fix/tcp-lifecycle`）。
-2. B05：进程退出路径。
-3. B06：鉴权，独立分支 `fix/http-auth`，方便回滚。
-4. B07 / B08：存储与配置。
-5. B09 / B10：收尾、补测试、同步文档。
+1. B01–B04：网络层连接生命周期（已完成）。
+2. B05：进程退出路径（已完成）。
+3. B06：TCP 会话与登出越权（已完成）。
+4. B09：生命周期与启动边界（已完成）。
+5. B10：CTest + README 纠偏（进行中）。
+6. B07/B08：HTTP demo 专属，暂缓，不占主线。
 
 ## 4. 完成验收
 
 - [ ] `cmake --build build -j` 全绿。
 - [ ] `ctest --output-on-failure` 全绿。
 - [ ] 手工验收：Ctrl-C 2s 退出；100 并发 connect 全接受；slow reader 收全 1MB；send+close 不丢帧。
-- [ ] ASan/TSan 无新增报错。
+- [ ] ASan/TSan 无新增报错（B10/CI 统一跑）。
 - [ ] README 与本文件同步勾选。
 
 ## 5. 不在本版范围
 
+- B07/B08：HTTP demo 的鉴权/同步 DB 改造，暂缓。
 - WebSocket、HTTP 与 TCP 共用 Service 层。
 - 群聊、消息落库、离线消息。
 - 环形 Buffer、writev、对象池等性能优化。
-- 头像上传类型/大小校验（并入 v1.1 安全项）。
 - 多进程 / 分布式。
 
 ## 6. 版本记录
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 7/8 主线 |
-| v1.1 | 待定 | 业务统一 + WebSocket + 群聊 | 未开始 |
+| v1.0 | 2026-10-23 | BUG 修复（本文件） | 主线完成 8/8 |
+| v1.1 | 待定 | TCP 消息闭环 + 群聊 + 离线 | 未开始 |
