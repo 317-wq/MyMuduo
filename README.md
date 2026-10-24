@@ -14,7 +14,7 @@
 - epoll **ET**、**One Loop Per Thread**、eventfd 跨线程唤醒、timerfd + 时间轮双定时器
 - 自定义二进制协议：4 字节 length + 2 字节 type + JSON body，处理半包 / 粘包
 - MySQL 连接池 + 异步 DB worker，Redis（redis++）缓存 + Cache-Aside
-- 业务：注册 / 登录（邮箱验证码）、好友、私聊转发、在线状态、心跳、连接超时
+- 业务：注册 / 登录（邮箱验证码）、好友、私聊落库 + ack、在线状态、心跳、连接超时
 
 ## 架构
 
@@ -61,7 +61,7 @@ worker io_loop × N
 - 6 字节头：`body_length(4) + msg_type(2)`，网络字节序
 - body 上限 64KB
 - 半包 / 粘包处理，消息工厂 + Dispatcher
-- 46 个协议单元测试
+- 47 个协议单元测试
 
 ### 存储层
 
@@ -75,7 +75,7 @@ worker io_loop × N
 
 - 邮箱验证码注册 / 登录（SHA-256 + 随机盐）
 - 好友搜索 / 添加 / 同意 / 拒绝 / 删除 / 列表
-- 私聊消息转发（**尚未落库**）
+- 私聊消息落库 + `msg_id`/`client_msg_id` + ack；在线 push、离线保存
 - 在线状态、心跳、连接超时
 - 单会话登录 / 登出身份校验
 
@@ -85,8 +85,8 @@ worker io_loop × N
 
 ## 当前限制（重要）
 
-- TCP 私聊只转发，不落库；进程重启消息丢失
-- 没有群聊、离线消息、`msg_id` / ack / 去重 / 已读回执
+- 私聊已落库，但历史/未读/离线同步尚未实现；进程重启后客户端暂时不会自动补消息
+- 没有群聊、离线增量同步、去重 / 已读回执
 - 单会话；不支持多端同时在线
 - 协议 body 是 JSON，体积和解析开销高于二进制；没有协议版本字段
 - 没有 TLS、限流、背压上限；慢客户端可能让 `out_buffer` 增长
@@ -147,7 +147,7 @@ ctest --output-on-failure
 
 | CTest 名称 | 用例数 | 覆盖 |
 |---|---:|---|
-| `proto` | 46 | 协议头、消息序列化、Codec 半包/粘包、Dispatcher |
+| `proto` | 47 | 协议头、消息序列化、Codec 半包/粘包、Dispatcher |
 | `tcp_lifecycle` | 4 | ET accept/write、半关闭、连接关闭回收 |
 | `server_boundaries` | 3 | `timeout=0`、端口占用、启动错误传递 |
 
@@ -242,7 +242,8 @@ v1.0 主线（B01–B06、B09、B10）：
 
 v1.1：
 
-- 私聊落库 + `msg_id` / ack / 历史 / 离线
+- [x] 私聊落库 + `msg_id` / ack
+- [ ] 私聊历史 / 未读 / 已读 / 离线同步
 - 群聊（建群 / 加入 / 退出 / 发送 / 历史 / 在线 fanout）
 - CLI 测试客户端 + 集成测试
 - 可复现压测、ASan / TSan、CI
