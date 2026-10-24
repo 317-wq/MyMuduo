@@ -3,10 +3,10 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v1.0-bugfix |
-| 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
+| 基线 | `88780b7` + 当前重构（RedisPool→redis++；HTTP demo 已移除） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **8 / 8（主线完成；B07/B08 暂缓）** |
+| 进度 | **8 / 8** |
 
 ## 0. 版本约定
 
@@ -19,9 +19,9 @@
 
 ## 1. 本版目标
 
-让 TCP 连接在正常关闭、RST、半关闭下不泄漏、不丢包、不空转；让进程能优雅退出；堵住 TCP 会话越权；把构建、测试、文档拉回可用状态。HTTP demo 暂缓，不再投入新功能。
+让 TCP 连接在正常关闭、RST、半关闭下不泄漏、不丢包、不空转；让进程能优雅退出；堵住 TCP 会话越权；把构建、测试、文档拉回可用状态。HTTP/Web demo 已移除，仓库只保留 TCP 服务端。
 
-> 主线：B01–B06、B09、B10（TCP 业务链路）；B07/B08 属 HTTP demo，暂缓。
+> 主线：B01–B06、B09、B10（TCP 业务链路）；B07/B08 随 HTTP demo 移除。
 
 ## 2. BUG 清单
 
@@ -55,12 +55,12 @@
   - 修复：读到 0 先 break，分发 buffer，再 `HandleClose()`；或用 `pending_close` 标记延迟关闭。
   - 验证：新增 `TcpLifecycleTest.SendThenHalfCloseDeliversBufferedData`：客户端发 64KB 后 `shutdown(SHUT_WR)`，服务端 handler 收到后才关闭。
 
-- [x] **B05 HTTP 服务无法优雅退出**（完成：2026-10-24）
-  - 现象：Ctrl-C / SIGTERM 后进程不退出，卡在 `http_thread.join()`。
-  - 发现：走查 `examples/chat_server/main.cpp:55-57` 与 `RunHttpServer` 的 `http.listen`（`examples/chat_server/HttpServer.cpp:1259`），没有 `stop()`；实际 Ctrl-C 复现。
-  - 根因：信号处理只 `Quit()` 了 base_loop；httplib 的 listen 仍阻塞，join 永远等不到。
-  - 修复：`HttpServer` 保存 `httplib::Server*` 并提供 `StopHttpServer()`；`main` 在 `server.Start()` 返回后先 `stop()` 再 `join()`；`EventLoop` 增加 `_quit_requested`，记录启动阶段收到的 `Quit`，避免 `Loop` 又把 `_running` 置回 true。
-  - 验证：`chat_server` 实测运行中 SIGTERM/SIGINT 约 200ms 退出，启动阶段 SIGTERM 约 400ms 退出；8080/8888 端口释放。
+- [x] **B05 进程优雅退出（HTTP 部分已移除）**（完成：2026-10-24）
+  - 现象：启动阶段收到 SIGTERM 时，`Quit()` 可能早于 `Loop()`，后者又把 `_running` 置回 true，导致进程不退出。
+  - 发现：走查 `EventLoop::Loop/Quit` 与信号处理；在 DB/Redis 初始化阶段发 SIGTERM 复现。
+  - 根因：`Quit` 的退出请求没有单独记录，`Loop` 无条件重置运行标志。
+  - 修复：`EventLoop` 增加 `_quit_requested`，`Loop` 启动前检查；HTTP demo 的 `StopHttpServer/join` 已随 demo 删除。
+  - 验证：运行中/启动阶段 SIGTERM 均能在秒级退出；8888 端口释放。原 HTTP join 验证不再适用。
 
 ### P1 · 安全与存储
 
@@ -71,21 +71,7 @@
   - 修复：`OnLogout` 用 `GetUserIdByFd(conn->Fd())`，未登录返回错误；`OnLogin` 若当前 fd 已绑定或正在登录（`_login_pending`）则拒绝；`SetUserOnline` 检查同账号是否已有其他连接（单会话），有则返回失败；close 回调只在 `_online_users[uid] == conn` 时清理，且只有当前会话才把 Redis 置离线。
   - 验证：两个测试账号 A/B 的协议客户端：A 用 B 的 id 登出后 B 仍可请求好友列表；同连接重复登录被拒；第二连接登录同账号被拒且原连接仍可用；A 登出后业务请求返回“请先登录”。
 
-> B07/B08 是 HTTP demo 的缺陷，当前 TCP 主线暂缓；HTTP 只保留本地 demo，不再投入鉴权/性能改造。等 TCP 主线完成后再决定是否回头修。
-
-- [ ] **B07 HTTP 把异步 DB 又做回了同步阻塞**
-  - 现象：DB 慢/断连时 HTTP 接口整体变慢；连接池耗尽后请求最多阻塞 15s。
-  - 发现：`RunDBSync`（`examples/chat_server/HttpUtils.cpp:17`）用条件变量同步等待；`ConnectionPool::Borrow` 在持锁状态下 `CreateConnection()`（`src/db/ConnectionPool.cpp:85`）。
-  - 根因：HTTP 层把异步 DB 封装成同步；建连是网络 IO，放在锁内会串行化所有 Borrow。
-  - 修复（本版最小）：建连移到锁外（预留名额→锁外建连→回填/回滚）；Borrow 等待加超时；DB 不可用时 HTTP 返回 503。完整异步化放 v1.1。
-  - 验证：停 MySQL 后接口 5s 内返回 503，不拖垮 `/health`；并发 50 请求无长时间排队。
-
-- [ ] **B08 HTTP 侧 Redis 每请求新建且硬编码**
-  - 现象：改 `config.ini` 的 Redis 地址不生效；Redis 挂掉时部分 HTTP 接口抛异常。
-  - 发现：全局搜 `sw::redis::Redis rctx`，`HttpServer.cpp` 有 7 处硬编码 `127.0.0.1:6379`。
-  - 根因：HTTP 侧绕过 `RedisCache`，每个请求新建客户端，地址写死，且无异常处理。
-  - 修复：`AppConfig` 增加 Redis 配置；`RunHttpServer` 接收连接参数或共享客户端；统一复用 `RedisDao`；加 try/catch 降级。
-  - 验证：改端口后生效；停 Redis 后 ping 返回 `success=false` 而非 500。
+> B07/B08 随 HTTP demo 移除，不再适用。
 
 ### P2 · 收尾
 
@@ -100,7 +86,7 @@
   - 现象：`ctest` 显示 0 个测试；README 的 `sql/init.sql`、`config.ini.example`、`./test_proto` 36 用例、RedisPool、群聊/撤回等描述与仓库不符。
   - 发现：`ctest -N`；逐条对照 README、`docs/architecture.md`、`docs/db.md` 与实际目录/实现。
   - 根因：CMake 未 `enable_testing()/add_test`；文档停留在重构前（RedisPool、HTTP/群聊功能、测试数量）。
-  - 修复：接入 `enable_testing` + `add_test`（proto/tcp_lifecycle/server_boundaries）；新增 `config.ini.example`；README 改为 TCP 服务端主线 + HTTP demo 冻结，修正依赖/路径/测试/限制；architecture/db 标注 RedisPool 已移除、保留历史章节。
+  - 修复：接入 `enable_testing` + `add_test`（proto/tcp_lifecycle/server_boundaries）；新增 `config.ini.example`；README 改为纯 TCP 服务端主线，修正依赖/路径/测试/限制；architecture/db 标注 RedisPool 已移除、保留历史章节。
   - 验证：`ctest --output-on-failure` 3/3 通过；按 README 从仓库根目录启动/SIGTERM 退出正常；`config.ini.example` 可复制使用。
 
 ## 3. 修复顺序
@@ -109,8 +95,8 @@
 2. B05：进程退出路径（已完成）。
 3. B06：TCP 会话与登出越权（已完成）。
 4. B09：生命周期与启动边界（已完成）。
-5. B10：CTest + README 纠偏（进行中）。
-6. B07/B08：HTTP demo 专属，暂缓，不占主线。
+5. B10：CTest + README 纠偏（已完成）。
+6. B07/B08：随 HTTP demo 移除，不再适用。
 
 ## 4. 完成验收
 
@@ -122,8 +108,7 @@
 
 ## 5. 不在本版范围
 
-- B07/B08：HTTP demo 的鉴权/同步 DB 改造，暂缓。
-- WebSocket、HTTP 与 TCP 共用 Service 层。
+- HTTP/Web demo 已移除；不做 WebSocket / 多端接入层。
 - 群聊、消息落库、离线消息。
 - 环形 Buffer、writev、对象池等性能优化。
 - 多进程 / 分布式。
@@ -133,4 +118,4 @@
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
 | v1.0 | 2026-10-23 | BUG 修复（本文件） | 主线完成 8/8 |
-| v1.1 | 待定 | TCP 消息闭环 + 群聊 + 离线 | 未开始 |
+| v1.1 | 2026-10-24 | TCP 消息闭环 + 群聊 + 离线 | 进行中 1/8 |
