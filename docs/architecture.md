@@ -588,7 +588,6 @@ MyMuduo/
 ├── src/               — 实现文件（与 include 对应）
 ├── test/              — 单元测试（Google Test）
 ├── examples/          — 使用示例
-├── static/            — 前端静态页面
 ├── third_party/       — 第三方库
 └── CMakeLists.txt
 ```
@@ -610,4 +609,3 @@ MyMuduo/
 | 构建 | CMake |
 | 测试 | Google Test |
 | 配置 | SimpleIni |
-| HTTP | cpp-httplib (第三方) |
