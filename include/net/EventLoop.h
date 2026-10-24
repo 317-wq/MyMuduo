@@ -23,6 +23,7 @@ public:
 
 private:
     std::atomic<bool> _running;
+    std::atomic<bool> _quit_requested{false}; // Quit 可能早于 Loop，单独记录退出请求
     Poller::Ptr _poller; // 管理所有channels监听对象，监听事件
     ChannelList _active_channels; // 活跃连接（就绪的对应监听对象的监听事件）
     std::thread::id _thread_id;
