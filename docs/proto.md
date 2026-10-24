@@ -113,6 +113,7 @@ enum class MessageType : uint16_t {
     // 聊天 (10-11)
     kChatMessage    = 10,
     kPrivateMessage = 11,
+    kPrivateMessageAck = 12,
 
     // 系统 (20)
     kSystemMessage = 20,
@@ -171,7 +172,8 @@ enum class MessageType : uint16_t {
 | 类型 | Body 字段 |
 |------|-----------|
 | `ChatMessage` | `user_id`, `username`, `content`, `timestamp` |
-| `PrivateMessage` | `from_user_id`, `from_username`, `to_user_id`, `content`, `timestamp` |
+| `PrivateMessage` | `msg_id`, `client_msg_id`, `from_user_id`, `from_username`, `to_user_id`, `content`, `timestamp` |
+| `PrivateMessageAck` | `client_msg_id`, `msg_id`, `success`, `message` |
 
 #### 系统类
 
