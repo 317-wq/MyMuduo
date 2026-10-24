@@ -244,13 +244,20 @@ void ChatServer::OnConnectionClosed(const TcpConnection::Ptr& conn)
             user_id = it->second;
             _fd_to_user_id.erase(it);
         }
+        _login_pending.erase(fd);
     }
     if (user_id > 0) {
+        bool was_current_session = false;
         {
             std::lock_guard<std::mutex> lock(_online_mutex);
-            _online_users.erase(user_id);
+            auto it = _online_users.find(user_id);
+            if (it != _online_users.end() && it->second == conn) {
+                _online_users.erase(it);
+                was_current_session = true;
+            }
         }
-        if (_redis) {
+        // 只有关闭的是当前会话时才把 Redis 标记为离线，避免旧连接误伤新会话。
+        if (was_current_session && _redis) {
             _redis->Execute(nullptr,
                 [user_id](sw::redis::Redis* ctx) {
                     RedisDao::SetUserOffline(ctx, user_id);
@@ -339,18 +346,42 @@ void ChatServer::OnLogin(const TcpConnection::Ptr& conn,
         return;
     }
 
+    // 一个连接只允许绑定一个账号；已登录或正在登录都拒绝，换号必须先登出。
+    int login_fd = conn->Fd();
+    bool login_busy = false;
+    {
+        std::lock_guard<std::mutex> lock(_fd_mutex);
+        login_busy = (_fd_to_user_id.count(login_fd) != 0)
+                  || (_login_pending.count(login_fd) != 0);
+        if (!login_busy) {
+            _login_pending.insert(login_fd);
+        }
+    }
+    if (login_busy) {
+        SendMessage(conn, ErrorMessage{3, "当前连接已登录或正在登录"});
+        return;
+    }
+
     LOG_INFO("Login request: email=%s", req->email.c_str());
 
     std::weak_ptr<TcpConnection> weak_conn = conn;
 
     _user_service->Login(req->email, req->password,
-        [this, weak_conn](int err, const std::string& msg_str, const UserInfo& user) {
+        [this, weak_conn, login_fd](int err, const std::string& msg_str, const UserInfo& user) {
+            // 登录回调返回后清除 pending，再处理结果。
+            {
+                std::lock_guard<std::mutex> lock(_fd_mutex);
+                _login_pending.erase(login_fd);
+            }
             auto conn = weak_conn.lock();
             if (!conn) return;
 
             if (err == 0) {
-                // 登录成功，记录在线状态
-                SetUserOnline(user.id, conn);
+                // 登录成功，记录在线状态；同一账号只允许一个活动连接。
+                if (!SetUserOnline(user.id, conn)) {
+                    SendMessage(conn, ErrorMessage{3, "该账号已在其他设备登录"});
+                    return;
+                }
                 LOG_INFO("User logged in: id=%u email=%s username=%s",
                          user.id, user.email.c_str(), user.username.c_str());
             }
@@ -376,8 +407,19 @@ void ChatServer::OnLogout(const TcpConnection::Ptr& conn,
         return;
     }
 
-    LOG_INFO("Logout request: user_id=%u", req->user_id);
-    SetUserOffline(req->user_id);
+    // 登出身份只认连接绑定的 uid，忽略客户端声明的 user_id，防止越权登出。
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (req->user_id != 0 && req->user_id != my_id) {
+        LOG_WARNING("Logout user_id mismatch: fd=%d session=%u request=%u",
+                    conn->Fd(), my_id, req->user_id);
+    }
+
+    LOG_INFO("Logout: user_id=%u fd=%d", my_id, conn->Fd());
+    SetUserOffline(my_id);
 
     LogoutResponse resp;
     resp.success = true;
@@ -400,10 +442,15 @@ void ChatServer::OnHeartbeat(const TcpConnection::Ptr& conn,
 // 在线用户管理
 // ============================================================
 
-void ChatServer::SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn)
+bool ChatServer::SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn)
 {
     {
         std::lock_guard<std::mutex> lock(_online_mutex);
+        auto it = _online_users.find(user_id);
+        if (it != _online_users.end() && it->second != conn) {
+            // 单会话策略：同一账号已有活动连接，拒绝新连接登录。
+            return false;
+        }
         _online_users[user_id] = conn;
     }
     {
@@ -418,6 +465,7 @@ void ChatServer::SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn)
             },
             nullptr);
     }
+    return true;
 }
 
 void ChatServer::SetUserOffline(uint32_t user_id)
@@ -432,7 +480,7 @@ void ChatServer::SetUserOffline(uint32_t user_id)
         }
         _online_users.erase(user_id);
     }
-    if (fd > 0) {
+    if (fd >= 0) {
         std::lock_guard<std::mutex> lock(_fd_mutex);
         _fd_to_user_id.erase(fd);
     }
