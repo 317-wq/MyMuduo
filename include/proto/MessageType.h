@@ -26,6 +26,7 @@ enum class MessageType : uint16_t {
     // 聊天消息
     kChatMessage = 10,
     kPrivateMessage = 11,
+    kPrivateMessageAck = 12,
 
     // 系统消息
     kSystemMessage = 20,
@@ -69,6 +70,7 @@ inline const char* MessageTypeName(MessageType type) {
         case MessageType::kSendCodeResponse: return "SendCodeResponse";
         case MessageType::kChatMessage:      return "ChatMessage";
         case MessageType::kPrivateMessage:   return "PrivateMessage";
+        case MessageType::kPrivateMessageAck: return "PrivateMessageAck";
         case MessageType::kSystemMessage:       return "SystemMessage";
         case MessageType::kSearchUserRequest:   return "SearchUserRequest";
         case MessageType::kSearchUserResponse:  return "SearchUserResponse";
