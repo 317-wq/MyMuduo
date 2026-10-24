@@ -1,6 +1,8 @@
 #include "net/Acceptor.h"
 #include <sys/socket.h>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 // 监听读事件：ET 模式下必须一次把 accept 队列排空，否则剩余连接可能等不到下一次边沿。
 void Acceptor::HandleRead(){
@@ -23,11 +25,19 @@ Acceptor::Acceptor(EventLoop* loop, const InetAddress &local, bool non_block)
     , _channel(std::make_unique<Channel>(loop, _listen_sock->Fd()))
 {
     _listen_sock->SetReuseAddr();
-    _listen_sock->SetReusePort();
+    // 单实例服务只保留 SO_REUSEADDR（处理 TIME_WAIT）；不开启 SO_REUSEPORT，
+    // 否则第二个实例会静默共享监听端口，导致“假启动”。
     if (non_block)
         _listen_sock->SetNonBlock();
-    _listen_sock->Bind(local);
-    _listen_sock->Listen();
+    // 绑定/监听失败必须向上抛错，避免端口被占用时服务端“假启动”。
+    if (!_listen_sock->Bind(local)) {
+        throw std::runtime_error("Acceptor: bind failed on port "
+                                 + std::to_string(local.Port()));
+    }
+    if (!_listen_sock->Listen()) {
+        throw std::runtime_error("Acceptor: listen failed on port "
+                                 + std::to_string(local.Port()));
+    }
     // 设置关心读事件回调
     _channel->SetReadCallback(std::bind(&Acceptor::HandleRead, this));
 }
