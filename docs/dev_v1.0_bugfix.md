@@ -6,7 +6,7 @@
 | 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **5 / 10** |
+| 进度 | **6 / 8（主线；B07/B08 暂缓）** |
 
 ## 0. 版本约定
 
@@ -19,7 +19,9 @@
 
 ## 1. 本版目标
 
-让 TCP 连接在正常关闭、RST、半关闭下不泄漏、不丢包、不空转；让进程能优雅退出；堵住 HTTP 越权与验证码回显；把构建、测试、文档拉回可用状态。
+让 TCP 连接在正常关闭、RST、半关闭下不泄漏、不丢包、不空转；让进程能优雅退出；堵住 TCP 会话越权；把构建、测试、文档拉回可用状态。HTTP demo 暂缓，不再投入新功能。
+
+> 主线：B01–B06、B09、B10（TCP 业务链路）；B07/B08 属 HTTP demo，暂缓。
 
 ## 2. BUG 清单
 
@@ -62,12 +64,14 @@
 
 ### P1 · 安全与存储
 
-- [ ] **B06 HTTP 无鉴权，user_id 全信客户端**
-  - 现象：知道 user_id 就能读任意对话、删任意账号；send-code 直接把验证码返回给前端。
-  - 发现：逐个检查 HTTP handler 的参数来源，`/api/user/account/delete`、`/api/messages/conversation`、`/api/send-code` 都只信请求体/query；`HttpServer.cpp:186` 回显 code。
-  - 根因：没有会话/令牌，服务端不校验“你是谁”；TCP 的 `OnLogout` 也直接使用 `req->user_id`（`src/service/ChatServer.cpp:373`）。
-  - 修复：登录签发 token（优先 HttpOnly Cookie，或 Bearer），加认证中间件解析 uid；所有接口用 uid；`send-code` 不回显；加简单限流。TCP 侧用连接绑定的 uid，不读请求体。
-  - 验证：无 token 返回 401；A 的 token 访问 B 的数据返回 403；send-code 响应无 code。
+- [x] **B06 TCP 会话状态与登出越权**（完成：2026-10-24）
+  - 现象：`OnLogout` 直接使用客户端传来的 `user_id`，A 可以把 B 登出；同一连接可以重复登录；同一账号可以在多个连接同时在线，在线状态会互相覆盖。
+  - 发现：审查 `OnLogin`/`OnLogout` 与各 handler 的 uid 来源，只有 `OnLogout` 用了 `req->user_id`（`src/service/ChatServer.cpp:379`）；`OnLogin` 没有检查当前 fd 是否已绑定；`_online_users[user_id]` 直接覆盖旧连接。
+  - 根因：会话只靠 `_fd_to_user_id` 隐式维护，没有“登录/登出”的显式状态机；登出信任客户端字段，登录不拒绝重复绑定。
+  - 修复：`OnLogout` 用 `GetUserIdByFd(conn->Fd())`，未登录返回错误；`OnLogin` 若当前 fd 已绑定或正在登录（`_login_pending`）则拒绝；`SetUserOnline` 检查同账号是否已有其他连接（单会话），有则返回失败；close 回调只在 `_online_users[uid] == conn` 时清理，且只有当前会话才把 Redis 置离线。
+  - 验证：两个测试账号 A/B 的协议客户端：A 用 B 的 id 登出后 B 仍可请求好友列表；同连接重复登录被拒；第二连接登录同账号被拒且原连接仍可用；A 登出后业务请求返回“请先登录”。
+
+> B07/B08 是 HTTP demo 的缺陷，当前 TCP 主线暂缓；HTTP 只保留本地 demo，不再投入鉴权/性能改造。等 TCP 主线完成后再决定是否回头修。
 
 - [ ] **B07 HTTP 把异步 DB 又做回了同步阻塞**
   - 现象：DB 慢/断连时 HTTP 接口整体变慢；连接池耗尽后请求最多阻塞 15s。
@@ -85,12 +89,12 @@
 
 ### P2 · 收尾
 
-- [ ] **B09 生命周期与边界小缺陷**
-  - 现象：`EventLoop` 泄漏；同账号重复登录后在线状态错乱；`timeout=0` 启动崩溃。
-  - 发现：代码审查发现 `ChatServer.cpp:16` 裸 `new EventLoop` 无 delete；两次登录覆盖 `_online_users[user_id]`，旧连接关闭按 user_id 删除；`TimeWheel` 构造未校验 capacity。
-  - 根因：所有权不清晰；在线映射以 user_id 为键，没有“连接代际”校验；边界值未防御。
-  - 修复：`unique_ptr<EventLoop>`；登录时先解绑/关闭旧连接，close 回调校验 `conn` 是否为当前映射；`TimeWheel` 校验 `timeout > 0`。
-  - 验证：重复登录两次，旧连接关闭不影响新连接在线状态；`timeout=0` 报错退出；ASan 无泄漏。
+- [ ] **B09 生命周期与启动边界**
+  - 现象：`EventLoop` 泄漏；`timeout=0` 启动崩溃；端口被占用时服务端“假启动”。
+  - 发现：`ChatServer.cpp:16` 裸 `new EventLoop` 无 delete；`TimeWheel` 构造未校验 capacity；`Acceptor` 构造忽略 `Bind`/`Listen` 返回值。
+  - 根因：所有权和启动边界没有统一约束；启动失败没有向上传递。
+  - 修复：`unique_ptr<EventLoop>`；`TimeWheel` 校验 `timeout > 0`；`Acceptor` 的 Bind/Listen 失败抛出异常或返回错误，`ChatServer::Start` fail-fast。
+  - 验证：ASan 无泄漏；`timeout=0` 启动报错；端口占用启动失败并退出；正常启动/退出。
 
 - [ ] **B10 测试接入 CTest + README 纠偏**
   - 现象：`ctest` 显示 0 个测试；README 的 `sql/init.sql`、`config.ini.example`、`./test_proto` 36 用例与仓库不符。
@@ -127,5 +131,5 @@
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 5/10 |
+| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 6/8 主线 |
 | v1.1 | 待定 | 业务统一 + WebSocket + 群聊 | 未开始 |
