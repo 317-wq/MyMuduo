@@ -4,17 +4,17 @@
 [![Build](https://img.shields.io/badge/build-cmake-green.svg)](https://cmake.org/)
 [![Test](https://img.shields.io/badge/test-gtest-brightgreen.svg)](https://github.com/google/googletest)
 
-> C++17 Reactor 网络库 + IM 服务端。TCP 自定义协议是主线；`static/` + `cpp-httplib` 的 Web 页面是早期演示，已冻结，不再投入新功能。
+> C++17 Reactor 网络库 + IM 服务端。**纯 TCP 服务端项目**，不做 Web/产品客户端。
 
 ## 项目定位
 
-这是一个面向学习 / 实习面试的 Linux C++ 服务端项目，重点在**网络层与连接生命周期**，不是生产级 IM：
+这是一个面向学习 / 实习面试的 Linux C++ 服务端项目，重点在**网络层与消息可靠性**：
 
 - 从零实现 Muduo 风格的 Reactor：`EventLoop` / `EpollPoller` / `Channel` / `TcpConnection`
 - epoll **ET**、**One Loop Per Thread**、eventfd 跨线程唤醒、timerfd + 时间轮双定时器
 - 自定义二进制协议：4 字节 length + 2 字节 type + JSON body，处理半包 / 粘包
 - MySQL 连接池 + 异步 DB worker，Redis（redis++）缓存 + Cache-Aside
-- 业务：注册 / 登录（邮箱验证码）、好友、私聊落库 + ack、在线状态、心跳、连接超时
+- 业务：注册 / 登录、好友、私聊落库 + `msg_id`/ack、在线状态、心跳、连接超时
 
 ## 架构
 
@@ -79,19 +79,15 @@ worker io_loop × N
 - 在线状态、心跳、连接超时
 - 单会话登录 / 登出身份校验
 
-### HTTP demo（实验性，已冻结）
-
-`examples/chat_server/HttpServer.cpp` 提供静态页面和 REST 接口，`static/` 是配套 Web 页面。它绕过 Reactor 直接调 DAO，**不适合生产，也不要暴露到公网**；后续不再加功能。
-
 ## 当前限制（重要）
 
-- 私聊已落库，但历史/未读/离线同步尚未实现；进程重启后客户端暂时不会自动补消息
-- 没有群聊、离线增量同步、去重 / 已读回执
+- **私聊历史 / 未读 / 已读 / 离线增量同步尚未实现**；离线消息已落库，但客户端登录后不会自动补
+- 没有群聊、消息去重、已读回执
 - 单会话；不支持多端同时在线
-- 协议 body 是 JSON，体积和解析开销高于二进制；没有协议版本字段
+- 协议 body 是 JSON，没有协议版本字段
 - 没有 TLS、限流、背压上限；慢客户端可能让 `out_buffer` 增长
-- HTTP demo 没有做 token 鉴权，仅作本地演示
 - 尚未接入 CI / ASan / TSan；DB / Redis 集成测试需要手动运行
+- Redis 建议启动；当前启动阶段未做连通性探测，Redis 不可用时验证码/缓存流程可能异常（登录会走 MySQL 回退）
 
 这不是生产项目；面试时建议定位为“Reactor 网络库 + IM 服务端”，不要包装成“高并发分布式 IM”。
 
@@ -108,7 +104,7 @@ worker io_loop × N
 | hiredis + redis++ | Redis 客户端 |
 | libcurl | SMTP 邮件 |
 | OpenSSL | SHA-256 / 随机数 |
-| SimpleIni / httplib | `third_party/` 内置 |
+| SimpleIni | `third_party/` 内置 |
 
 Ubuntu 24.04 安装：
 
@@ -176,14 +172,11 @@ vim config.ini
 ./build/chat_server
 ```
 
-默认端口：
-
-- TCP 自定义协议：`8888`
-- HTTP demo：`8080`
+默认只监听 TCP `8888`。
 
 说明：
 
-- Redis 建议启动；当前启动阶段未做 Redis 连通性探测，Redis 不可用时验证码/缓存流程可能异常（登录会走 MySQL 回退）。HTTP demo 的在线状态接口依赖 Redis。
+- Redis 建议启动；不可用时 TCP 主链路登录会回退 MySQL，但验证码/缓存流程可能异常。
 - SMTP 留空时验证码只写入 `log/log.log`，便于本地开发。
 - `timeout` 必须大于 0；`timeout=0` 会启动失败并返回非 0。
 
@@ -208,18 +201,17 @@ include/
   service/     ChatServer、UserService、FriendService、EmailSender
 src/           与 include 对应的实现
 examples/chat_server/
-  main.cpp     服务端入口
-  HttpServer*  HTTP demo（实验性）
-static/        Web demo 页面
+  main.cpp     纯 TCP 服务端入口
+  AppConfig*   配置加载
 test/          协议 / 生命周期 / 启动边界 + DB/Redis 集成测试
 benchmark/     echo_bench、tcp_bench
-docs/          architecture、proto、db、dev_v1.0_bugfix、performance、web_framework
-third_party/   httplib.h、SimpleIni.h
+docs/          architecture、proto、db、dev_v1.0_bugfix、dev_v1.1_im_flow、performance
+third_party/   SimpleIni.h
 config.ini.example
 init.sql
 ```
 
-C++ 约 13k 行（含测试、示例、压测），前端约 3.6k 行。
+C++ 约 12k 行（含测试、示例、压测）。
 
 ## 文档
 
@@ -227,29 +219,30 @@ C++ 约 13k 行（含测试、示例、压测），前端约 3.6k 行。
 - [协议层](docs/proto.md)
 - [数据库 & Redis](docs/db.md)（RedisPool 章节为历史记录）
 - [v1.0 BUG 修复记录](docs/dev_v1.0_bugfix.md)
+- [v1.1 IM 业务线](docs/dev_v1.1_im_flow.md)
 - [性能与设计分析](docs/performance_and_design.md)（历史压测数据，需按当前环境复测）
-- [HTTP demo 说明](docs/web_framework.md)
 
 ## Roadmap
 
 v1.0 主线（B01–B06、B09、B10）：
 
 - [x] ET accept/write、半关闭、close 回调覆盖
-- [x] HTTP 优雅退出
+- [x] 进程优雅退出
 - [x] TCP 会话 / 登出越权 / 单会话
 - [x] EventLoop 泄漏、启动边界
 - [x] CTest + README 纠偏
 
 v1.1：
 
-- [x] 私聊落库 + `msg_id` / ack
-- [ ] 私聊历史 / 未读 / 已读 / 离线同步
-- 群聊（建群 / 加入 / 退出 / 发送 / 历史 / 在线 fanout）
-- CLI 测试客户端 + 集成测试
-- 可复现压测、ASan / TSan、CI
-- B07/B08（HTTP demo）暂缓，不在主线
+- [x] F01 私聊落库 + `msg_id` / ack
+- [ ] F02 私聊历史 / 未读 / 已读
+- [ ] F03 离线增量同步
+- [ ] F04 群聊基础
+- [ ] F05 群消息 / fanout / 历史
+- [ ] F07 CLI 测试客户端 + 集成测试
+- [ ] F08 压测 / ASan / CI / 面试讲稿
 
-不做：Qt / 产品客户端、分布式多进程、HTTP 新功能。
+不做：Qt / 产品客户端、HTTP/Web、分布式多进程。
 
 ## 说明
 
