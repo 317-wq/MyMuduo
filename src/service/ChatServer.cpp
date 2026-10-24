@@ -1,6 +1,9 @@
 #include "service/ChatServer.h"
 #include "net/Log.h"
 #include "base/Timestamp.h"
+#include "db/FriendDao.h"
+#include "db/PrivateMessageDao.h"
+#include "db/UserDao.h"
 
 #include "SimpleIni.h"
 
@@ -695,7 +698,7 @@ void ChatServer::OnPrivateMessage(const TcpConnection::Ptr& conn,
         return;
     }
 
-    // 从 fd 获取发送者身份（覆盖客户端声明的字段，防伪造）
+    // 发送者身份只认连接绑定的 uid，不接受客户端声明的 from_user_id。
     uint32_t my_id = GetUserIdByFd(conn->Fd());
     if (my_id == 0) {
         SendMessage(conn, ErrorMessage{2, "请先登录"});
@@ -707,32 +710,88 @@ void ChatServer::OnPrivateMessage(const TcpConnection::Ptr& conn,
         SendMessage(conn, ErrorMessage{1, "参数错误：无效的接收者"});
         return;
     }
-
-    LOG_INFO("PrivateMessage: from=%u to=%u content_len=%zu",
-             my_id, to_user_id, req->content.size());
-
-    // 用服务器端的身份信息覆盖消息
-    req->from_user_id = my_id;
-    req->timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
-
-    // 查找接收者的连接
-    TcpConnection::Ptr target_conn = GetConnectionByUserId(to_user_id);
-
-    if (target_conn) {
-        // 接收者在线 → 转发
-        SendMessage(target_conn, *req);
-        LOG_INFO("PrivateMessage forwarded: %u → %u", my_id, to_user_id);
+    if (req->content.size() > 65535) {
+        SendMessage(conn, ErrorMessage{1, "消息内容过长"});
+        return;
     }
 
-    // 同时给发送者回显（确认发送成功）
-    // 接收者不在线时，消息仅回显给发送者
-    if (!target_conn) {
-        // 通知发送者对方不在线
-        SystemMessage sys_msg;
-        sys_msg.content = "对方当前离线，消息未送达";
-        sys_msg.timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
-        SendMessage(conn, sys_msg);
-    }
+    const uint32_t client_msg_id = req->client_msg_id;
+    const std::string content = req->content;
+
+    struct Result {
+        bool ok = false;
+        uint32_t msg_id = 0;
+        std::string message;
+        std::string from_username;
+    };
+    auto result = std::make_shared<Result>();
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    // 先落库，再 ack/push：消息的权威顺序在 MySQL，推送只是通知。
+    _db->Execute(_base_loop.get(),
+        [my_id, to_user_id, content, result](sql::Connection* db_conn) {
+            UserInfo sender;
+            if (!UserDao::GetUserById(db_conn, my_id, sender)) {
+                result->message = "发送者不存在";
+                return;
+            }
+            result->from_username = sender.username;
+
+            if (!FriendDao::IsFriend(db_conn, my_id, to_user_id)) {
+                result->message = "你们还不是好友，无法发送私聊";
+                return;
+            }
+
+            if (!PrivateMessageDao::SendMessage(
+                    db_conn, my_id, to_user_id, content, result->msg_id)) {
+                result->message = "消息保存失败";
+                return;
+            }
+
+            result->ok = true;
+            result->message = "发送成功";
+        },
+        [this, weak_conn, to_user_id, content, client_msg_id, result]() {
+            auto conn = weak_conn.lock();
+            if (!conn) return;
+
+            TcpConnection::Ptr target =
+                result->ok ? GetConnectionByUserId(to_user_id) : nullptr;
+
+            PrivateMessageAck ack;
+            ack.client_msg_id = client_msg_id;
+            ack.msg_id = result->msg_id;
+            ack.success = result->ok;
+            ack.message = result->message;
+            if (result->ok && !target) {
+                ack.message = "发送成功（对方离线，已保存）";
+            }
+            SendMessage(conn, ack);
+
+            if (!result->ok) {
+                LOG_INFO("PrivateMessage rejected: from=%u to=%u reason=%s",
+                         GetUserIdByFd(conn->Fd()), to_user_id,
+                         result->message.c_str());
+                return;
+            }
+
+            if (target) {
+                PrivateMessage push;
+                push.msg_id = result->msg_id;
+                push.client_msg_id = client_msg_id;
+                push.from_user_id = GetUserIdByFd(conn->Fd());
+                push.from_username = result->from_username;
+                push.to_user_id = to_user_id;
+                push.content = content;
+                push.timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
+                SendMessage(target, push);
+                LOG_INFO("PrivateMessage delivered: msg_id=%u %u -> %u",
+                         result->msg_id, push.from_user_id, to_user_id);
+            } else {
+                LOG_INFO("PrivateMessage stored offline: msg_id=%u to=%u",
+                         result->msg_id, to_user_id);
+            }
+        });
 }
 
 // ============================================================
