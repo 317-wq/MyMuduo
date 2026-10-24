@@ -1,0 +1,31 @@
+[server]
+# TCP 监听端口
+port = 8888
+# IO 工作线程数
+threads = 4
+# 连接超时秒数，必须大于 0
+timeout = 60
+
+[database]
+host = 127.0.0.1
+port = 3306
+user = root
+password = change_me
+database = mymuduo
+# MySQL 连接池大小
+pool_size = 4
+
+[redis]
+# Redis 缓存（可选；不可用时 TCP 主链路回退 MySQL）
+host = 127.0.0.1
+port = 6379
+pool_size = 4
+
+[email]
+# SMTP 验证码邮件（留空时验证码只输出到日志，便于本地开发）
+smtp_host =
+smtp_port = 587
+smtp_user =
+smtp_password =
+from_name = MyMuduo
+code_expire_seconds = 300
