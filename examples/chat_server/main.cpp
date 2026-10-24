@@ -7,6 +7,7 @@
 #include "net/Log.h"
 #include <atomic>
 #include <csignal>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -52,12 +53,22 @@ int main()
     std::cout << "-------------------------------\n" << std::endl;
     
     server.SetDatabase(std::move(db));
-    server.Start();
 
-    // base_loop 已退出，通知 HTTP 线程停止并等待其释放端口。
+    int exit_code = 0;
+    try {
+        server.Start();
+    } catch (const std::exception& e) {
+        // 端口占用、timeout=0 等启动错误：记录后退出，不能假装启动成功。
+        LOG_ERROR("Server start failed: %s", e.what());
+        exit_code = 1;
+    }
+
+    // base_loop 已退出（或启动失败），通知 HTTP 线程停止并等待其释放端口。
     StopHttpServer();
     g_running = false;
     http_thread.join();
-    std::cout << "Server stopped. Goodbye!" << std::endl;
-    return 0;
+    std::cout << (exit_code == 0 ? "Server stopped. Goodbye!"
+                                 : "Server failed to start.")
+              << std::endl;
+    return exit_code;
 }
