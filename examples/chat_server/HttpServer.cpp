@@ -18,6 +18,24 @@
 // HTTP 服务就绪标志
 std::atomic<bool> g_http_ready{false};
 
+namespace {
+
+// 指向当前 httplib 实例，供 StopHttpServer 跨线程停止 listen。
+std::atomic<httplib::Server*> g_http_server{nullptr};
+
+// 记录停止请求，避免启动与停止竞争时又进入 listen。
+std::atomic<bool> g_http_stop_requested{false};
+
+}  // namespace
+
+// 停止 HTTP 服务：设置停止标志并唤醒阻塞中的 listen。
+void StopHttpServer() {
+    g_http_stop_requested.store(true);
+    if (auto* server = g_http_server.load()) {
+        server->stop();
+    }
+}
+
 // ============================================================
 // HTTP 服务线程
 // ============================================================
@@ -34,6 +52,7 @@ void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         std::string notfound_path = static_dir + "/html/404.html";
 
     httplib::Server http;
+    g_http_server.store(&http);
 
     // ---- 静态文件挂载 ----
     http.set_mount_point("/static", static_dir);
@@ -1252,14 +1271,22 @@ void RunHttpServer(Database* db, const EmailSender::Config& email_cfg)
         SendJson(res, resp);
     });
 
+    // 停止请求可能早于 listen（例如启动阶段收到 SIGTERM），此时不再进入阻塞。
+    if (g_http_stop_requested.load()) {
+        g_http_server.store(nullptr);
+        LOG_INFO("HTTP server stop requested before listen");
+        return;
+    }
+
     LOG_INFO("HTTP server listening on port %d", kHttpPort);
     g_http_ready = true;
 
-    // listen 是阻塞调用，出错时才会返回
+    // listen 是阻塞调用，StopHttpServer() 或出错时返回
     if (!http.listen("0.0.0.0", kHttpPort)) {
-        g_http_ready = false;
         LOG_ERROR("HTTP server failed to start on port %d", kHttpPort);
     }
 
+    g_http_ready = false;
+    g_http_server.store(nullptr);
     LOG_INFO("HTTP server stopped");
 }
