@@ -193,6 +193,8 @@ TEST(MessageTest, ChatMessageMissingContent) {
 
 TEST(MessageTest, PrivateMessage) {
     PrivateMessage msg;
+    msg.msg_id = 42;
+    msg.client_msg_id = 1001;
     msg.from_user_id = 1;
     msg.from_username = "alice";
     msg.to_user_id = 2;
@@ -202,10 +204,28 @@ TEST(MessageTest, PrivateMessage) {
     std::string json_str = msg.ToJsonString();
     PrivateMessage restored;
     EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.msg_id, 42);
+    EXPECT_EQ(restored.client_msg_id, 1001);
     EXPECT_EQ(restored.from_user_id, 1);
     EXPECT_EQ(restored.from_username, "alice");
     EXPECT_EQ(restored.to_user_id, 2);
     EXPECT_EQ(restored.content, "Secret!");
+}
+
+TEST(MessageTest, PrivateMessageAck) {
+    PrivateMessageAck ack;
+    ack.client_msg_id = 1001;
+    ack.msg_id = 42;
+    ack.success = true;
+    ack.message = "发送成功";
+
+    std::string json_str = ack.ToJsonString();
+    PrivateMessageAck restored;
+    EXPECT_TRUE(restored.FromJsonString(json_str));
+    EXPECT_EQ(restored.client_msg_id, 1001);
+    EXPECT_EQ(restored.msg_id, 42);
+    EXPECT_TRUE(restored.success);
+    EXPECT_EQ(restored.message, "发送成功");
 }
 
 TEST(MessageTest, SystemMessage) {
@@ -701,6 +721,7 @@ TEST(MessageTypeNameTest, AllTypesHaveName) {
     EXPECT_STREQ(MessageTypeName(MessageType::kLoginResponse), "LoginResponse");
     EXPECT_STREQ(MessageTypeName(MessageType::kChatMessage), "ChatMessage");
     EXPECT_STREQ(MessageTypeName(MessageType::kPrivateMessage), "PrivateMessage");
+    EXPECT_STREQ(MessageTypeName(MessageType::kPrivateMessageAck), "PrivateMessageAck");
     EXPECT_STREQ(MessageTypeName(MessageType::kSystemMessage), "SystemMessage");
     EXPECT_STREQ(MessageTypeName(MessageType::kError), "Error");
     // 新增好友类型
