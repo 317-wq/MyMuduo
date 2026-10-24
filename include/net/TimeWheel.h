@@ -36,6 +36,7 @@ private:
     void Tick();
 
 public:
+    // timeout 为时间轮槽位数，必须大于 0。
     TimeWheel(EventLoop* loop, size_t timeout);
 
     // 设置超时回调函数
