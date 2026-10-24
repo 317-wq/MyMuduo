@@ -61,7 +61,11 @@ CREATE TABLE IF NOT EXISTS private_messages (
     to_user_id   INT UNSIGNED NOT NULL,
     content      TEXT NOT NULL,
     is_read      TINYINT NOT NULL DEFAULT 0 COMMENT '0=未读, 1=已读',
+    is_revoked   TINYINT NOT NULL DEFAULT 0 COMMENT '0=正常, 1=已撤回',
+    reply_to_id  INT UNSIGNED DEFAULT NULL COMMENT '回复的消息 ID',
+    reply_preview VARCHAR(200) DEFAULT '' COMMENT '被回复消息摘要',
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_conversation (from_user_id, to_user_id, id),
     INDEX idx_unread (to_user_id, is_read, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
