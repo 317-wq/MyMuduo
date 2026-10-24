@@ -6,7 +6,7 @@
 | 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **4 / 10** |
+| 进度 | **5 / 10** |
 
 ## 0. 版本约定
 
@@ -53,12 +53,12 @@
   - 修复：读到 0 先 break，分发 buffer，再 `HandleClose()`；或用 `pending_close` 标记延迟关闭。
   - 验证：新增 `TcpLifecycleTest.SendThenHalfCloseDeliversBufferedData`：客户端发 64KB 后 `shutdown(SHUT_WR)`，服务端 handler 收到后才关闭。
 
-- [ ] **B05 HTTP 服务无法优雅退出**
+- [x] **B05 HTTP 服务无法优雅退出**（完成：2026-10-24）
   - 现象：Ctrl-C / SIGTERM 后进程不退出，卡在 `http_thread.join()`。
   - 发现：走查 `examples/chat_server/main.cpp:55-57` 与 `RunHttpServer` 的 `http.listen`（`examples/chat_server/HttpServer.cpp:1259`），没有 `stop()`；实际 Ctrl-C 复现。
   - 根因：信号处理只 `Quit()` 了 base_loop；httplib 的 listen 仍阻塞，join 永远等不到。
-  - 修复：全局保存 `httplib::Server*`；main 在 join 前调用 `stop()`（不要在信号处理函数里直接 stop）；或信号线程置标志，主线程随后 stop。
-  - 验证：SIGTERM 后 2s 内退出，8080/8888 端口释放。
+  - 修复：`HttpServer` 保存 `httplib::Server*` 并提供 `StopHttpServer()`；`main` 在 `server.Start()` 返回后先 `stop()` 再 `join()`；`EventLoop` 增加 `_quit_requested`，记录启动阶段收到的 `Quit`，避免 `Loop` 又把 `_running` 置回 true。
+  - 验证：`chat_server` 实测运行中 SIGTERM/SIGINT 约 200ms 退出，启动阶段 SIGTERM 约 400ms 退出；8080/8888 端口释放。
 
 ### P1 · 安全与存储
 
@@ -127,5 +127,5 @@
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 4/10 |
+| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 5/10 |
 | v1.1 | 待定 | 业务统一 + WebSocket + 群聊 | 未开始 |
