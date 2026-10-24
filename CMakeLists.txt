@@ -207,9 +207,6 @@ target_link_libraries(test_friend_dao
 add_executable(chat_server
     examples/chat_server/main.cpp
     examples/chat_server/AppConfig.cpp
-    examples/chat_server/HttpUtils.cpp
-    examples/chat_server/HttpServer.cpp
-    examples/chat_server/HttpSelfTest.cpp
     ${NET_SRCS}
     ${PROTO_SRCS}
     ${DB_SRCS}
