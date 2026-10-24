@@ -1,5 +1,23 @@
 #include "net/TimeWheel.h"
 
+#include <limits>
+#include <stdexcept>
+
+namespace {
+
+// 校验时间轮槽位数量，避免 timeout=0 时取模崩溃。
+int CheckCapacity(size_t timeout) {
+    if (timeout == 0) {
+        throw std::invalid_argument("TimeWheel timeout must be greater than 0");
+    }
+    if (timeout > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        throw std::invalid_argument("TimeWheel timeout is too large");
+    }
+    return static_cast<int>(timeout);
+}
+
+}  // namespace
+
 // 回调设置的函数，指针向前1每次，到哪里哪里就释放[删除连接等操作]
 void TimeWheel::Tick(){
     _index = (_index + 1) % _capacity;
@@ -26,7 +44,7 @@ void TimeWheel::Tick(){
 
 TimeWheel::TimeWheel(EventLoop *loop, size_t timeout)
     :_loop(loop)
-    ,_capacity(timeout)
+    ,_capacity(CheckCapacity(timeout))
     ,_wheel(_capacity)
     ,_index(0)
     ,_alive(std::make_shared<bool>(true))
