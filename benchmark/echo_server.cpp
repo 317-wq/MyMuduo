@@ -1,7 +1,7 @@
 /**
  * HTTP Echo 压测服务端
  *
- * 基于 MyMuduo 网络库 + cpp-httplib，用于 wrk 压测。
+ * 基于 MyMuduo 网络库手写简易 HTTP 响应，用于 wrk 压测。
  *
  * 用法：
  *   1. 编译：在 CMakeLists.txt 中添加本文件
