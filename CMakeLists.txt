@@ -111,6 +111,16 @@ target_link_libraries(test_tcp_lifecycle
     GTest::Main
 )
 
+# 服务端启动边界测试（B09）
+add_executable(test_server_boundaries
+    test/test_server_boundaries.cpp
+    ${NET_SRCS}
+)
+target_link_libraries(test_server_boundaries
+    pthread
+    GTest::Main
+)
+
 # 数据库 + 用户服务集成测试
 # add_executable(test_db
 #     test/test_db.cpp
