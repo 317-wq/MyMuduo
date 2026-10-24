@@ -6,7 +6,7 @@
 | 基线 | `88780b7` + 当前未提交重构（RedisPool→redis++、main 拆分 HttpServer） |
 | 日期 | 2026-10-23 |
 | 范围 | 只修正确性与安全问题，不引入新功能 |
-| 进度 | **6 / 8（主线；B07/B08 暂缓）** |
+| 进度 | **7 / 8（主线；B07/B08 暂缓）** |
 
 ## 0. 版本约定
 
@@ -89,12 +89,12 @@
 
 ### P2 · 收尾
 
-- [ ] **B09 生命周期与启动边界**
-  - 现象：`EventLoop` 泄漏；`timeout=0` 启动崩溃；端口被占用时服务端“假启动”。
-  - 发现：`ChatServer.cpp:16` 裸 `new EventLoop` 无 delete；`TimeWheel` 构造未校验 capacity；`Acceptor` 构造忽略 `Bind`/`Listen` 返回值。
-  - 根因：所有权和启动边界没有统一约束；启动失败没有向上传递。
-  - 修复：`unique_ptr<EventLoop>`；`TimeWheel` 校验 `timeout > 0`；`Acceptor` 的 Bind/Listen 失败抛出异常或返回错误，`ChatServer::Start` fail-fast。
-  - 验证：ASan 无泄漏；`timeout=0` 启动报错；端口占用启动失败并退出；正常启动/退出。
+- [x] **B09 生命周期与启动边界**（完成：2026-10-24）
+  - 现象：`EventLoop` 泄漏；`timeout=0` 启动崩溃；端口被占用时服务端“假启动”，第二个实例甚至能通过 `SO_REUSEPORT` 共享 8888。
+  - 发现：`ChatServer.cpp:16` 裸 `new EventLoop` 无 delete；`TimeWheel` 构造未校验 capacity；`Acceptor` 构造忽略 `Bind`/`Listen` 返回值，且同时开启了 `SO_REUSEPORT`。
+  - 根因：所有权和启动边界没有统一约束；单实例服务不应允许两个进程共享监听端口，启动失败也没有向上传递。
+  - 修复：`_base_loop` 改为 `std::unique_ptr<EventLoop>`；`TimeWheel` 校验 `timeout > 0` 并抛出 `std::invalid_argument`；`Acceptor` 的 Bind/Listen 失败抛 `std::runtime_error`；`Acceptor` 只保留 `SO_REUSEADDR`，移除 `SO_REUSEPORT`；`main` 捕获启动异常并返回非 0。
+  - 验证：`test_server_boundaries` 3/3；进程级第二个 `chat_server` 退出码 1 并打印 `bind failed on port 8888`；`timeout=0` 退出码 1 并打印 `TimeWheel timeout must be greater than 0`；ASan 留到 B10/CI 统一跑。
 
 - [ ] **B10 测试接入 CTest + README 纠偏**
   - 现象：`ctest` 显示 0 个测试；README 的 `sql/init.sql`、`config.ini.example`、`./test_proto` 36 用例与仓库不符。
@@ -131,5 +131,5 @@
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 6/8 主线 |
+| v1.0 | 2026-10-23 | BUG 修复（本文件） | 进行中 7/8 主线 |
 | v1.1 | 待定 | 业务统一 + WebSocket + 群聊 | 未开始 |
