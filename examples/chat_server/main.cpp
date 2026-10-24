@@ -53,6 +53,9 @@ int main()
     
     server.SetDatabase(std::move(db));
     server.Start();
+
+    // base_loop 已退出，通知 HTTP 线程停止并等待其释放端口。
+    StopHttpServer();
     g_running = false;
     http_thread.join();
     std::cout << "Server stopped. Goodbye!" << std::endl;
