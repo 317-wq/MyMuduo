@@ -86,7 +86,7 @@ worker io_loop × N
 - 单会话；不支持多端同时在线
 - 协议 body 是 JSON，没有协议版本字段
 - 没有 TLS、限流、背压上限；慢客户端可能让 `out_buffer` 增长
-- 尚未接入 CI / ASan / TSan；DB / Redis 集成测试需要手动运行
+- 尚未接入 CI / ASan / TSan
 - Redis 建议启动；当前启动阶段未做连通性探测，Redis 不可用时验证码/缓存流程可能异常（登录会走 MySQL 回退）
 
 这不是生产项目；面试时建议定位为“Reactor 网络库 + IM 服务端”，不要包装成“高并发分布式 IM”。
@@ -147,17 +147,6 @@ ctest --output-on-failure
 | `tcp_lifecycle` | 4 | ET accept/write、半关闭、连接关闭回收 |
 | `server_boundaries` | 3 | `timeout=0`、端口占用、启动错误传递 |
 
-DB / Redis 集成测试需要本地 MySQL + Redis，手动运行：
-
-```bash
-./build/test_redis_pool
-./build/test_redis_dao
-./build/test_redis_cache
-./build/test_user_service_redis
-./build/test_friend_dao
-./build/test_friend_service
-```
-
 ## 运行
 
 ```bash
@@ -203,7 +192,7 @@ src/           与 include 对应的实现
 examples/chat_server/
   main.cpp     纯 TCP 服务端入口
   AppConfig*   配置加载
-test/          协议 / 生命周期 / 启动边界 + DB/Redis 集成测试
+test/          协议 / 生命周期 / 启动边界
 benchmark/     echo_bench、tcp_bench
 docs/          architecture、proto、db、dev_v1.0_bugfix、dev_v1.1_im_flow、performance
 third_party/   SimpleIni.h
