@@ -13,7 +13,7 @@ static ChatServer* g_server = nullptr;
 
 ChatServer::ChatServer()
 {
-    _base_loop = new EventLoop();
+    _base_loop = std::make_unique<EventLoop>();
 }
 
 ChatServer::~ChatServer()
@@ -110,21 +110,21 @@ void ChatServer::Start()
     }
 
     // 3. 初始化用户服务
-    _user_service = std::make_unique<UserService>(_db.get(), _base_loop);
+    _user_service = std::make_unique<UserService>(_db.get(), _base_loop.get());
     _user_service->SetEmailConfig(_email_cfg);
     if (_redis) {
         _user_service->SetRedisCache(_redis.get());
     }
 
     // 4. 初始化好友服务
-    _friend_service = std::make_unique<FriendService>(_db.get(), _base_loop);
+    _friend_service = std::make_unique<FriendService>(_db.get(), _base_loop.get());
     if (_redis) {
         _friend_service->SetRedisCache(_redis.get());
     }
 
     // 3. 初始化 TcpServer
     _server = std::make_unique<TcpServer>(
-        _base_loop, static_cast<uint16_t>(_server_port),
+        _base_loop.get(), static_cast<uint16_t>(_server_port),
         _thread_num, _timeout);
 
     // 4. 设置连接回调[就是tcpserver通知TcpConnection来处理这个连接，对其进行管理和设置]
