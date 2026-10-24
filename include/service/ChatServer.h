@@ -42,6 +42,7 @@
 #include <string>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstdint>
 
 class ChatServer : NoCopy {
@@ -91,7 +92,8 @@ private:
     void OnPrivateMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
 
     // ---------- 在线用户管理 ----------
-    void SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn);
+    // 绑定在线会话；同一账号已在其他连接登录时返回 false（单会话）。
+    bool SetUserOnline(uint32_t user_id, const TcpConnection::Ptr& conn);
     void SetUserOffline(uint32_t user_id);
     TcpConnection::Ptr GetConnectionByUserId(uint32_t user_id);
     uint32_t GetUserIdByFd(int fd);
@@ -116,6 +118,8 @@ private:
     // fd → user_id（从连接反查用户身份）
     std::mutex _fd_mutex;
     std::unordered_map<int, uint32_t> _fd_to_user_id;
+    // 正在异步登录的 fd，防止同一连接并发发起多次登录。
+    std::unordered_set<int> _login_pending;
 
     // 配置参数
     std::string _db_host = "127.0.0.1";
