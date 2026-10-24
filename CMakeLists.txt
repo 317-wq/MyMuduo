@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(MyMuduo)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--copy-dt-needed-entries")
 
@@ -266,3 +268,9 @@ add_executable(tcp_bench
 target_link_libraries(tcp_bench
     pthread
 )
+
+# ============ CTest ============
+# 只注册不依赖 MySQL/Redis 的自包含测试；DB/Redis 集成测试仍按需手动运行。
+add_test(NAME proto COMMAND test_proto)
+add_test(NAME tcp_lifecycle COMMAND test_tcp_lifecycle)
+add_test(NAME server_boundaries COMMAND test_server_boundaries)
