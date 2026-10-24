@@ -57,7 +57,7 @@ public:
     void Stop();
 
     // 获取 EventLoop 指针（供 HTTP 服务器等外部组件投递任务）
-    EventLoop* GetLoop() const { return _base_loop; }
+    EventLoop* GetLoop() const { return _base_loop.get(); }
 
     // 设置外部创建的 Database（必须在 Start() 前调用）
     // 如果不调用，Start() 会自行创建
@@ -102,7 +102,7 @@ private:
     void SendMessage(const TcpConnection::Ptr& conn, const Message& msg);
 
     // ---------- 组件 ----------
-    EventLoop* _base_loop = nullptr;   // 不持有所有权，new/delete 管理
+    std::unique_ptr<EventLoop> _base_loop;   // 拥有事件循环，随 ChatServer 析构释放
     std::unique_ptr<Database> _db;
     std::unique_ptr<RedisCache> _redis;
     std::unique_ptr<UserService> _user_service;
