@@ -1,5 +1,8 @@
 # MyMuduo 数据库 & Redis 缓存层说明
 
+> 说明：自建 `RedisPool` 已在 v1.0 重构中移除，当前使用 redis++ 内置连接池（`RedisCache` / `RedisDao`）。下方 RedisPool 章节保留为历史设计记录。
+
+
 > 本文档描述 MyMuduo 的 MySQL 持久化存储和 Redis 缓存层的设计与实现。
 
 ---
