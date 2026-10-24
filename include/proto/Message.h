@@ -149,11 +149,26 @@ public:
     Json::Value ToJson() const override;
     bool FromJson(const Json::Value& root) override;
 
+    uint32_t msg_id = 0;         // 服务端生成的全局消息 ID
+    uint32_t client_msg_id = 0;  // 客户端生成的请求 ID，用于 ack 匹配
     uint32_t from_user_id = 0;
     std::string from_username;
     uint32_t to_user_id = 0;
     std::string content;
     int64_t timestamp = 0;
+};
+
+// ---------- 私聊发送回执 ----------
+class PrivateMessageAck : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kPrivateMessageAck; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t client_msg_id = 0;
+    uint32_t msg_id = 0;
+    bool success = false;
+    std::string message;
 };
 
 // ---------- 系统消息（服务器推送） ----------
