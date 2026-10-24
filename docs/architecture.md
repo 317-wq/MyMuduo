@@ -582,7 +582,7 @@ MyMuduo/
 │   │   ├── ConnectionPool.h, Database.h
 │   │   ├── UserDao.h, FriendDao.h, PrivateMessageDao.h
 │   ├── cache/         — Redis 缓存层
-│   │   ├── RedisPool.h, RedisCache.h, RedisDao.h
+│   │   ├── RedisCache.h, RedisDao.h（redis++ 内置连接池）
 │   └── service/       — 业务服务层
 │       ├── ChatServer.h, UserService.h, FriendService.h, EmailSender.h
 ├── src/               — 实现文件（与 include 对应）
