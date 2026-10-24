@@ -84,13 +84,6 @@ set(CACHE_SRCS
     src/cache/RedisDao.cpp
 )
 
-# 原有 test_server
-# add_executable(test_server
-#     test/test_server.cpp
-#     ${NET_SRCS}
-# )
-# target_link_libraries(test_server pthread)
-
 # 协议层测试 (gtest)
 add_executable(test_proto
     test/test_proto.cpp
@@ -122,23 +115,6 @@ target_link_libraries(test_server_boundaries
     pthread
     GTest::Main
 )
-
-# 数据库 + 用户服务集成测试
-# add_executable(test_db
-#     test/test_db.cpp
-#     ${NET_SRCS}
-#     ${PROTO_SRCS}
-#     ${DB_SRCS}
-#     ${SERVICE_SRCS}
-#     ${BASE_SRCS}
-# )
-# target_link_libraries(test_db
-#     pthread
-#     ${JSONCPP_LIBRARIES}
-#     mysqlcppconn
-#     crypto
-#     curl
-# )
 
 # Redis 连接池测试（验证 redis++ 内置连接池）
 add_executable(test_redis_pool
