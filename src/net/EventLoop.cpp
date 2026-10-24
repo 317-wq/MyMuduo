@@ -48,6 +48,7 @@ EventLoop::EventLoop()
 }
 
 void EventLoop::Quit(){
+    _quit_requested = true;
     _running = false;
     // 唤醒可能处于epoll_wait的线程
     WakeUp();
@@ -55,6 +56,10 @@ void EventLoop::Quit(){
 
 // 事件循环
 void EventLoop::Loop(){
+    // Quit 可能在 Loop 启动前被调用（例如启动阶段收到 SIGTERM），此时直接退出。
+    if (_quit_requested.load()) {
+        return;
+    }
     _running = true;
     while(_running){
         _active_channels.clear();
