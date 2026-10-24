@@ -50,6 +50,8 @@ Message::Ptr Message::Create(MessageType type) {
             return std::make_shared<ChatMessage>();
         case MessageType::kPrivateMessage:
             return std::make_shared<PrivateMessage>();
+        case MessageType::kPrivateMessageAck:
+            return std::make_shared<PrivateMessageAck>();
         case MessageType::kSystemMessage:
             return std::make_shared<SystemMessage>();
         case MessageType::kLogoutRequest:
@@ -259,6 +261,8 @@ bool ChatMessage::FromJson(const Json::Value& root) {
 Json::Value PrivateMessage::ToJson() const {
     Json::Value root;
     root["type"] = "private_message";
+    root["msg_id"] = static_cast<Json::UInt>(msg_id);
+    root["client_msg_id"] = static_cast<Json::UInt>(client_msg_id);
     root["from_user_id"] = static_cast<Json::UInt>(from_user_id);
     root["from_username"] = from_username;
     root["to_user_id"] = static_cast<Json::UInt>(to_user_id);
@@ -270,11 +274,35 @@ Json::Value PrivateMessage::ToJson() const {
 bool PrivateMessage::FromJson(const Json::Value& root) {
     if (!root.isMember("content"))
         return false;
+    msg_id = root.get("msg_id", 0).asUInt();
+    client_msg_id = root.get("client_msg_id", 0).asUInt();
     from_user_id = root.get("from_user_id", 0).asUInt();
     from_username = root.get("from_username", "").asString();
     to_user_id = root.get("to_user_id", 0).asUInt();
     content = root["content"].asString();
     timestamp = root.get("timestamp", 0).asInt64();
+    return true;
+}
+
+// ============================================================
+// PrivateMessageAck
+// ============================================================
+
+Json::Value PrivateMessageAck::ToJson() const {
+    Json::Value root;
+    root["type"] = "private_message_ack";
+    root["client_msg_id"] = static_cast<Json::UInt>(client_msg_id);
+    root["msg_id"] = static_cast<Json::UInt>(msg_id);
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool PrivateMessageAck::FromJson(const Json::Value& root) {
+    client_msg_id = root.get("client_msg_id", 0).asUInt();
+    msg_id = root.get("msg_id", 0).asUInt();
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
     return true;
 }
 
