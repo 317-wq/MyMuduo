@@ -94,6 +94,8 @@ private:
     void OnJoinGroup(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
     void OnLeaveGroup(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
     void OnGroupList(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnGroupMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnGroupHistory(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
 
     // 私聊消息
     void OnPrivateMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
