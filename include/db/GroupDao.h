@@ -13,6 +13,18 @@
 #include <string>
 #include <vector>
 
+// 群消息记录（历史/推送使用）
+struct GroupMessageRecord {
+    uint32_t id = 0;
+    uint32_t group_id = 0;
+    uint32_t from_user_id = 0;
+    std::string from_username;
+    std::string content;
+    bool is_revoked = false;
+    std::string created_at;
+    std::string updated_at;
+};
+
 // 群信息（列表/加群回包使用）
 struct GroupInfo {
     uint32_t id = 0;
@@ -61,4 +73,26 @@ public:
     static bool ListGroups(sql::Connection* conn,
                            uint32_t user_id,
                            std::vector<GroupInfo>& out);
+
+    // 是否群成员。
+    static bool IsMember(sql::Connection* conn,
+                         uint32_t group_id, uint32_t user_id);
+
+    // 群消息落库，返回自增 msg_id。
+    static bool SendGroupMessage(sql::Connection* conn,
+                                 uint32_t group_id, uint32_t from_id,
+                                 const std::string& content,
+                                 uint32_t& out_msg_id);
+
+    // 群历史：id > after_id，多查一条判断 has_more。
+    static bool GetGroupHistory(sql::Connection* conn,
+                                uint32_t group_id, uint32_t after_id,
+                                int limit,
+                                std::vector<GroupMessageRecord>& out,
+                                bool& has_more);
+
+    // 在线 fanout 用的成员 id 列表。
+    static bool ListMemberIds(sql::Connection* conn,
+                              uint32_t group_id,
+                              std::vector<uint32_t>& out);
 };
