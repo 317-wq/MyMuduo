@@ -90,6 +90,12 @@ private:
 
     // 私聊消息
     void OnPrivateMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    // 私聊历史 / 未读 / 已读
+    void OnPrivateHistory(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnUnread(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnMarkRead(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    // 离线增量同步
+    void OnSync(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
 
     // ---------- 在线用户管理 ----------
     // 绑定在线会话；同一账号已在其他连接登录时返回 false（单会话）。
