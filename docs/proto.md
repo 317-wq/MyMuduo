@@ -144,6 +144,16 @@ enum class MessageType : uint16_t {
     kFriendListRequest   = 48,
     kFriendListResponse  = 49,
 
+    // 群聊基础 (50-57)
+    kCreateGroupRequest  = 50,
+    kCreateGroupResponse = 51,
+    kJoinGroupRequest    = 52,
+    kJoinGroupResponse   = 53,
+    kLeaveGroupRequest   = 54,
+    kLeaveGroupResponse  = 55,
+    kGroupListRequest    = 56,
+    kGroupListResponse   = 57,
+
     // 错误 (99)
     kError = 99,
 
@@ -151,7 +161,7 @@ enum class MessageType : uint16_t {
 };
 ```
 
-类型编号按功能域分段：心跳 0、登录 1-9、聊天 10-19、系统 20-29、登出 30-39、好友 40-49，便于扩展。
+类型编号按功能域分段：心跳 0、登录 1-9、聊天 10-19、系统 20-29、登出 30-39、好友 40-49、群聊 50-57，便于扩展。
 
 ### 3.2 消息类型总览
 
@@ -220,6 +230,19 @@ enum class MessageType : uint16_t {
 | `DeleteFriendResponse` | — | `success`, `message` |
 | `FriendListRequest` | (空) | — |
 | `FriendListResponse` | — | `success`, `friends: [{id, email, username, avatar, remark, online}]` |
+
+#### 群聊基础类
+
+| 类型 | Body 字段 (Request) | Body 字段 (Response) |
+|------|---------------------|----------------------|
+| `CreateGroupRequest` | `name` | — |
+| `CreateGroupResponse` | — | `success`, `message`, `group_id` |
+| `JoinGroupRequest` | `group_id` | — |
+| `JoinGroupResponse` | — | `success`, `message`, `group_id`, `group_name`, `member_count`, `my_role` |
+| `LeaveGroupRequest` | `group_id` | — |
+| `LeaveGroupResponse` | — | `success`, `message` |
+| `GroupListRequest` | (空) | — |
+| `GroupListResponse` | — | `success`, `message`, `groups: [{group_id, name, owner_id, member_count, my_role, created_at}]` |
 
 #### 错误类
 
