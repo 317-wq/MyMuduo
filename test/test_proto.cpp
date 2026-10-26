@@ -228,6 +228,115 @@ TEST(MessageTest, PrivateMessageAck) {
     EXPECT_EQ(restored.message, "发送成功");
 }
 
+TEST(MessageTest, PrivateHistory) {
+    PrivateHistoryRequest req;
+    req.friend_id = 2;
+    req.after_id = 10;
+    req.limit = 20;
+
+    std::string req_json = req.ToJsonString();
+    PrivateHistoryRequest req2;
+    EXPECT_TRUE(req2.FromJsonString(req_json));
+    EXPECT_EQ(req2.friend_id, 2);
+    EXPECT_EQ(req2.after_id, 10);
+    EXPECT_EQ(req2.limit, 20);
+
+    PrivateHistoryResponse resp;
+    resp.success = true;
+    resp.message = "ok";
+    resp.friend_id = 2;
+    PrivateHistoryResponse::Item item;
+    item.msg_id = 42;
+    item.from_user_id = 1;
+    item.to_user_id = 2;
+    item.content = "hello";
+    item.is_read = false;
+    item.created_at = "2026-10-24 19:00:00";
+    resp.messages.push_back(item);
+
+    std::string resp_json = resp.ToJsonString();
+    PrivateHistoryResponse resp2;
+    EXPECT_TRUE(resp2.FromJsonString(resp_json));
+    EXPECT_TRUE(resp2.success);
+    EXPECT_EQ(resp2.friend_id, 2);
+    ASSERT_EQ(resp2.messages.size(), 1u);
+    EXPECT_EQ(resp2.messages[0].msg_id, 42);
+    EXPECT_EQ(resp2.messages[0].content, "hello");
+}
+
+TEST(MessageTest, Sync) {
+    SyncRequest req;
+    req.last_private_id = 100;
+    req.limit = 50;
+
+    std::string req_json = req.ToJsonString();
+    SyncRequest req2;
+    EXPECT_TRUE(req2.FromJsonString(req_json));
+    EXPECT_EQ(req2.last_private_id, 100);
+    EXPECT_EQ(req2.limit, 50);
+
+    SyncResponse resp;
+    resp.success = true;
+    resp.message = "ok";
+    resp.last_msg_id = 102;
+    resp.has_more = true;
+    PrivateMessage msg;
+    msg.msg_id = 101;
+    msg.from_user_id = 1;
+    msg.to_user_id = 2;
+    msg.content = "offline";
+    msg.created_at = "2026-10-24 20:00:00";
+    resp.messages.push_back(msg);
+
+    std::string resp_json = resp.ToJsonString();
+    SyncResponse resp2;
+    EXPECT_TRUE(resp2.FromJsonString(resp_json));
+    EXPECT_TRUE(resp2.success);
+    EXPECT_EQ(resp2.last_msg_id, 102);
+    EXPECT_TRUE(resp2.has_more);
+    ASSERT_EQ(resp2.messages.size(), 1u);
+    EXPECT_EQ(resp2.messages[0].msg_id, 101);
+    EXPECT_EQ(resp2.messages[0].content, "offline");
+    EXPECT_EQ(resp2.messages[0].created_at, "2026-10-24 20:00:00");
+}
+
+TEST(MessageTest, UnreadAndMarkRead) {
+    UnreadRequest req;
+    std::string req_json = req.ToJsonString();
+    UnreadRequest req2;
+    EXPECT_TRUE(req2.FromJsonString(req_json));
+
+    UnreadResponse resp;
+    resp.success = true;
+    resp.total = 3;
+    resp.counts[2] = 2;
+    resp.counts[3] = 1;
+
+    std::string resp_json = resp.ToJsonString();
+    UnreadResponse resp2;
+    EXPECT_TRUE(resp2.FromJsonString(resp_json));
+    EXPECT_TRUE(resp2.success);
+    EXPECT_EQ(resp2.total, 3);
+    ASSERT_EQ(resp2.counts.size(), 2u);
+    EXPECT_EQ(resp2.counts[2], 2);
+    EXPECT_EQ(resp2.counts[3], 1);
+
+    MarkReadRequest mark;
+    mark.friend_id = 2;
+    std::string mark_json = mark.ToJsonString();
+    MarkReadRequest mark2;
+    EXPECT_TRUE(mark2.FromJsonString(mark_json));
+    EXPECT_EQ(mark2.friend_id, 2);
+
+    MarkReadResponse mark_resp;
+    mark_resp.success = true;
+    mark_resp.message = "已标记已读";
+    std::string mark_resp_json = mark_resp.ToJsonString();
+    MarkReadResponse mark_resp2;
+    EXPECT_TRUE(mark_resp2.FromJsonString(mark_resp_json));
+    EXPECT_TRUE(mark_resp2.success);
+}
+
 TEST(MessageTest, SystemMessage) {
     SystemMessage msg;
     msg.content = "Server will restart in 5 minutes";
