@@ -28,8 +28,20 @@ enum class MessageType : uint16_t {
     kPrivateMessage = 11,
     kPrivateMessageAck = 12,
 
+    // 私聊历史 / 未读 / 已读
+    kPrivateHistoryRequest = 13,
+    kPrivateHistoryResponse = 14,
+    kUnreadRequest = 15,
+    kUnreadResponse = 16,
+    kMarkReadRequest = 17,
+    kMarkReadResponse = 18,
+
     // 系统消息
     kSystemMessage = 20,
+
+    // 登录后离线增量同步
+    kSyncRequest = 21,
+    kSyncResponse = 22,
 
     // 好友相关
     kSearchUserRequest = 40,
@@ -71,7 +83,15 @@ inline const char* MessageTypeName(MessageType type) {
         case MessageType::kChatMessage:      return "ChatMessage";
         case MessageType::kPrivateMessage:   return "PrivateMessage";
         case MessageType::kPrivateMessageAck: return "PrivateMessageAck";
+        case MessageType::kPrivateHistoryRequest: return "PrivateHistoryRequest";
+        case MessageType::kPrivateHistoryResponse: return "PrivateHistoryResponse";
+        case MessageType::kUnreadRequest: return "UnreadRequest";
+        case MessageType::kUnreadResponse: return "UnreadResponse";
+        case MessageType::kMarkReadRequest: return "MarkReadRequest";
+        case MessageType::kMarkReadResponse: return "MarkReadResponse";
         case MessageType::kSystemMessage:       return "SystemMessage";
+        case MessageType::kSyncRequest:       return "SyncRequest";
+        case MessageType::kSyncResponse:      return "SyncResponse";
         case MessageType::kSearchUserRequest:   return "SearchUserRequest";
         case MessageType::kSearchUserResponse:  return "SearchUserResponse";
         case MessageType::kAddFriendRequest:    return "AddFriendRequest";
