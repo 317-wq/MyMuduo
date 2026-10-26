@@ -204,6 +204,24 @@ void ChatServer::Start()
             OnPrivateMessage(conn, std::move(msg), ts);
         });
 
+    // 私聊历史 / 未读 / 已读
+    _dispatcher.Register(MessageType::kPrivateHistoryRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnPrivateHistory(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kUnreadRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnUnread(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kMarkReadRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnMarkRead(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kSyncRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnSync(conn, std::move(msg), ts);
+        });
+
     // 9. 启动 TcpServer
     _server->Start();
     LOG_INFO("ChatServer started on port %d", _server_port);
@@ -791,6 +809,196 @@ void ChatServer::OnPrivateMessage(const TcpConnection::Ptr& conn,
                 LOG_INFO("PrivateMessage stored offline: msg_id=%u to=%u",
                          result->msg_id, to_user_id);
             }
+        });
+}
+
+// ---------- 私聊历史 ----------
+void ChatServer::OnPrivateHistory(const TcpConnection::Ptr& conn,
+                                  Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<PrivateHistoryRequest*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req || req->friend_id == 0 || req->friend_id == my_id) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：无效的好友"});
+        return;
+    }
+
+    const uint32_t friend_id = req->friend_id;
+    const uint32_t after_id = req->after_id;
+    int limit = req->limit;
+    if (limit <= 0) limit = 50;
+    if (limit > 200) limit = 200;
+
+    auto result = std::make_shared<PrivateHistoryResponse>();
+    result->friend_id = friend_id;
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _db->Execute(_base_loop.get(),
+        [my_id, friend_id, after_id, limit, result](sql::Connection* db_conn) {
+            std::vector<PrivateMessageRecord> messages;
+            std::vector<PrivateMessageRecord> updates;
+            if (!PrivateMessageDao::GetConversation(
+                    db_conn, my_id, friend_id, after_id, limit,
+                    messages, updates, "")) {
+                result->message = "查询失败";
+                return;
+            }
+
+            result->success = true;
+            result->message = "ok";
+            for (const auto& m : messages) {
+                PrivateHistoryResponse::Item item;
+                item.msg_id = m.id;
+                item.from_user_id = m.from_user_id;
+                item.to_user_id = m.to_user_id;
+                item.content = m.content;
+                item.is_read = m.is_read;
+                item.is_revoked = m.is_revoked;
+                item.reply_to_id = m.reply_to_id;
+                item.reply_preview = m.reply_preview;
+                item.created_at = m.created_at;
+                item.updated_at = m.updated_at;
+                result->messages.push_back(std::move(item));
+            }
+        },
+        [this, weak_conn, result]() {
+            auto conn = weak_conn.lock();
+            if (!conn) return;
+            SendMessage(conn, *result);
+        });
+}
+
+// ---------- 未读数 ----------
+void ChatServer::OnUnread(const TcpConnection::Ptr& conn,
+                          Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<UnreadRequest*>(msg.get());
+    if (!req) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    auto result = std::make_shared<UnreadResponse>();
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _db->Execute(_base_loop.get(),
+        [my_id, result](sql::Connection* db_conn) {
+            result->counts = PrivateMessageDao::GetUnreadCounts(db_conn, my_id);
+            result->total = 0;
+            for (const auto& kv : result->counts) {
+                result->total += kv.second;
+            }
+            result->success = true;
+        },
+        [this, weak_conn, result]() {
+            auto conn = weak_conn.lock();
+            if (!conn) return;
+            SendMessage(conn, *result);
+        });
+}
+
+// ---------- 标记已读 ----------
+void ChatServer::OnMarkRead(const TcpConnection::Ptr& conn,
+                            Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<MarkReadRequest*>(msg.get());
+    if (!req || req->friend_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：缺少好友"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    const uint32_t friend_id = req->friend_id;
+    auto result = std::make_shared<MarkReadResponse>();
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _db->Execute(_base_loop.get(),
+        [my_id, friend_id, result](sql::Connection* db_conn) {
+            result->success = PrivateMessageDao::MarkAsRead(db_conn, my_id, friend_id);
+            result->message = result->success ? "已标记已读" : "标记失败";
+        },
+        [this, weak_conn, result]() {
+            auto conn = weak_conn.lock();
+            if (!conn) return;
+            SendMessage(conn, *result);
+        });
+}
+
+// ---------- 离线增量同步 ----------
+void ChatServer::OnSync(const TcpConnection::Ptr& conn,
+                        Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<SyncRequest*>(msg.get());
+    if (!req) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    const uint32_t last_private_id = req->last_private_id;
+    int limit = req->limit;
+    if (limit <= 0) limit = 200;
+    if (limit > 200) limit = 200;
+
+    auto result = std::make_shared<SyncResponse>();
+    result->last_msg_id = last_private_id;
+    result->message = "同步失败";
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _db->Execute(_base_loop.get(),
+        [my_id, last_private_id, limit, result](sql::Connection* db_conn) {
+            std::vector<PrivateMessageRecord> records;
+            bool has_more = false;
+            if (!PrivateMessageDao::GetIncomingAfter(
+                    db_conn, my_id, last_private_id, limit, records, has_more)) {
+                return;
+            }
+
+            result->success = true;
+            result->message = "ok";
+            result->has_more = has_more;
+            for (const auto& r : records) {
+                PrivateMessage m;
+                m.msg_id = r.id;
+                m.from_user_id = r.from_user_id;
+                m.from_username = r.from_username;
+                m.to_user_id = r.to_user_id;
+                m.content = r.content;
+                m.created_at = r.created_at;
+                if (r.id > result->last_msg_id) {
+                    result->last_msg_id = r.id;
+                }
+                result->messages.push_back(std::move(m));
+            }
+        },
+        [this, weak_conn, result]() {
+            auto conn = weak_conn.lock();
+            if (!conn) return;
+            SendMessage(conn, *result);
         });
 }
 
