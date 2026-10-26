@@ -208,3 +208,113 @@ bool GroupDao::ListGroups(sql::Connection* conn,
     }
     return true;
 }
+
+// ============================================================
+// F05：群消息
+// ============================================================
+
+bool GroupDao::IsMember(sql::Connection* conn,
+                        uint32_t group_id, uint32_t user_id)
+{
+    std::unique_ptr<sql::PreparedStatement> stmt(
+        conn->prepareStatement(
+            "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?"));
+    stmt->setUInt(1, group_id);
+    stmt->setUInt(2, user_id);
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    return rs->next();
+}
+
+bool GroupDao::SendGroupMessage(sql::Connection* conn,
+                                uint32_t group_id, uint32_t from_id,
+                                const std::string& content,
+                                uint32_t& out_msg_id)
+{
+    out_msg_id = 0;
+    {
+        std::unique_ptr<sql::PreparedStatement> stmt(
+            conn->prepareStatement(
+                "INSERT INTO group_messages (group_id, from_user_id, content) "
+                "VALUES (?, ?, ?)"));
+        stmt->setUInt(1, group_id);
+        stmt->setUInt(2, from_id);
+        stmt->setString(3, content);
+        stmt->executeUpdate();
+    }
+
+    {
+        std::unique_ptr<sql::Statement> stmt(conn->createStatement());
+        std::unique_ptr<sql::ResultSet> rs(
+            stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+        if (rs->next()) {
+            out_msg_id = rs->getUInt(1);
+        }
+    }
+    return true;
+}
+
+bool GroupDao::GetGroupHistory(sql::Connection* conn,
+                               uint32_t group_id, uint32_t after_id,
+                               int limit,
+                               std::vector<GroupMessageRecord>& out,
+                               bool& has_more)
+{
+    out.clear();
+    has_more = false;
+    if (limit <= 0) limit = 50;
+
+    std::string sql =
+        "SELECT m.id, m.group_id, m.from_user_id, m.content, m.is_revoked, "
+        "m.created_at, m.updated_at, IFNULL(u.username, '') AS from_username "
+        "FROM group_messages m "
+        "LEFT JOIN users u ON u.id = m.from_user_id "
+        "WHERE m.group_id = ?";
+    if (after_id > 0) {
+        sql += " AND m.id > ?";
+    }
+    sql += " ORDER BY m.id ASC LIMIT ?";
+
+    std::unique_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(sql));
+    int idx = 1;
+    stmt->setUInt(idx++, group_id);
+    if (after_id > 0) {
+        stmt->setUInt(idx++, after_id);
+    }
+    stmt->setInt(idx, limit + 1);
+
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next()) {
+        GroupMessageRecord msg;
+        msg.id = rs->getUInt("id");
+        msg.group_id = rs->getUInt("group_id");
+        msg.from_user_id = rs->getUInt("from_user_id");
+        msg.from_username = rs->getString("from_username");
+        msg.content = rs->getString("content");
+        msg.is_revoked = rs->getBoolean("is_revoked");
+        msg.created_at = rs->getString("created_at");
+        msg.updated_at = rs->getString("updated_at");
+        out.push_back(std::move(msg));
+    }
+
+    if (static_cast<int>(out.size()) > limit) {
+        out.pop_back();
+        has_more = true;
+    }
+    return true;
+}
+
+bool GroupDao::ListMemberIds(sql::Connection* conn,
+                             uint32_t group_id,
+                             std::vector<uint32_t>& out)
+{
+    out.clear();
+    std::unique_ptr<sql::PreparedStatement> stmt(
+        conn->prepareStatement(
+            "SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id"));
+    stmt->setUInt(1, group_id);
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next()) {
+        out.push_back(rs->getUInt(1));
+    }
+    return true;
+}
