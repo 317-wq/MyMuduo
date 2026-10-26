@@ -52,6 +52,22 @@ Message::Ptr Message::Create(MessageType type) {
             return std::make_shared<PrivateMessage>();
         case MessageType::kPrivateMessageAck:
             return std::make_shared<PrivateMessageAck>();
+        case MessageType::kPrivateHistoryRequest:
+            return std::make_shared<PrivateHistoryRequest>();
+        case MessageType::kPrivateHistoryResponse:
+            return std::make_shared<PrivateHistoryResponse>();
+        case MessageType::kUnreadRequest:
+            return std::make_shared<UnreadRequest>();
+        case MessageType::kUnreadResponse:
+            return std::make_shared<UnreadResponse>();
+        case MessageType::kMarkReadRequest:
+            return std::make_shared<MarkReadRequest>();
+        case MessageType::kMarkReadResponse:
+            return std::make_shared<MarkReadResponse>();
+        case MessageType::kSyncRequest:
+            return std::make_shared<SyncRequest>();
+        case MessageType::kSyncResponse:
+            return std::make_shared<SyncResponse>();
         case MessageType::kSystemMessage:
             return std::make_shared<SystemMessage>();
         case MessageType::kLogoutRequest:
@@ -268,6 +284,7 @@ Json::Value PrivateMessage::ToJson() const {
     root["to_user_id"] = static_cast<Json::UInt>(to_user_id);
     root["content"] = content;
     root["timestamp"] = static_cast<Json::Int64>(timestamp);
+    root["created_at"] = created_at;
     return root;
 }
 
@@ -281,6 +298,7 @@ bool PrivateMessage::FromJson(const Json::Value& root) {
     to_user_id = root.get("to_user_id", 0).asUInt();
     content = root["content"].asString();
     timestamp = root.get("timestamp", 0).asInt64();
+    created_at = root.get("created_at", "").asString();
     return true;
 }
 
@@ -301,6 +319,156 @@ Json::Value PrivateMessageAck::ToJson() const {
 bool PrivateMessageAck::FromJson(const Json::Value& root) {
     client_msg_id = root.get("client_msg_id", 0).asUInt();
     msg_id = root.get("msg_id", 0).asUInt();
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    return true;
+}
+
+// ============================================================
+// PrivateHistoryRequest
+// ============================================================
+
+Json::Value PrivateHistoryRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "private_history_request";
+    root["friend_id"] = static_cast<Json::UInt>(friend_id);
+    root["after_id"] = static_cast<Json::UInt>(after_id);
+    root["limit"] = limit;
+    return root;
+}
+
+bool PrivateHistoryRequest::FromJson(const Json::Value& root) {
+    friend_id = root.get("friend_id", 0).asUInt();
+    after_id = root.get("after_id", 0).asUInt();
+    limit = root.get("limit", 50).asInt();
+    return true;
+}
+
+// ============================================================
+// PrivateHistoryResponse
+// ============================================================
+
+Json::Value PrivateHistoryResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "private_history_response";
+    root["success"] = success;
+    root["message"] = message;
+    root["friend_id"] = static_cast<Json::UInt>(friend_id);
+
+    Json::Value arr(Json::arrayValue);
+    for (const auto& m : messages) {
+        Json::Value item;
+        item["msg_id"] = static_cast<Json::UInt>(m.msg_id);
+        item["from_user_id"] = static_cast<Json::UInt>(m.from_user_id);
+        item["to_user_id"] = static_cast<Json::UInt>(m.to_user_id);
+        item["content"] = m.content;
+        item["is_read"] = m.is_read;
+        item["is_revoked"] = m.is_revoked;
+        item["reply_to_id"] = static_cast<Json::UInt>(m.reply_to_id);
+        item["reply_preview"] = m.reply_preview;
+        item["created_at"] = m.created_at;
+        item["updated_at"] = m.updated_at;
+        arr.append(item);
+    }
+    root["messages"] = arr;
+    return root;
+}
+
+bool PrivateHistoryResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    friend_id = root.get("friend_id", 0).asUInt();
+
+    const Json::Value& arr = root["messages"];
+    if (arr.isArray()) {
+        for (const auto& item : arr) {
+            Item m;
+            m.msg_id = item.get("msg_id", 0).asUInt();
+            m.from_user_id = item.get("from_user_id", 0).asUInt();
+            m.to_user_id = item.get("to_user_id", 0).asUInt();
+            m.content = item.get("content", "").asString();
+            m.is_read = item.get("is_read", false).asBool();
+            m.is_revoked = item.get("is_revoked", false).asBool();
+            m.reply_to_id = item.get("reply_to_id", 0).asUInt();
+            m.reply_preview = item.get("reply_preview", "").asString();
+            m.created_at = item.get("created_at", "").asString();
+            m.updated_at = item.get("updated_at", "").asString();
+            messages.push_back(std::move(m));
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// UnreadRequest / UnreadResponse
+// ============================================================
+
+Json::Value UnreadRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "unread_request";
+    return root;
+}
+
+bool UnreadRequest::FromJson(const Json::Value& root) {
+    (void)root;
+    return true;
+}
+
+Json::Value UnreadResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "unread_response";
+    root["success"] = success;
+    root["total"] = total;
+    Json::Value obj(Json::objectValue);
+    for (const auto& kv : counts) {
+        obj[std::to_string(kv.first)] = kv.second;
+    }
+    root["counts"] = obj;
+    return root;
+}
+
+bool UnreadResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    total = root.get("total", 0).asInt();
+    counts.clear();
+    const Json::Value& obj = root["counts"];
+    if (obj.isObject()) {
+        for (const auto& name : obj.getMemberNames()) {
+            try {
+                counts[static_cast<uint32_t>(std::stoul(name))] = obj[name].asInt();
+            } catch (...) {
+                // 忽略非法 key，避免坏包导致解析失败
+            }
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// MarkReadRequest / MarkReadResponse
+// ============================================================
+
+Json::Value MarkReadRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "mark_read_request";
+    root["friend_id"] = static_cast<Json::UInt>(friend_id);
+    return root;
+}
+
+bool MarkReadRequest::FromJson(const Json::Value& root) {
+    friend_id = root.get("friend_id", 0).asUInt();
+    return true;
+}
+
+Json::Value MarkReadResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "mark_read_response";
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool MarkReadResponse::FromJson(const Json::Value& root) {
     success = root.get("success", false).asBool();
     message = root.get("message", "").asString();
     return true;
@@ -596,5 +764,58 @@ Json::Value ErrorMessage::ToJson() const {
 bool ErrorMessage::FromJson(const Json::Value& root) {
     code = root.get("code", 0).asInt();
     message = root.get("message", "").asString();
+    return true;
+}
+
+// ============================================================
+// SyncRequest / SyncResponse
+// ============================================================
+
+Json::Value SyncRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "sync_request";
+    root["last_private_id"] = static_cast<Json::UInt>(last_private_id);
+    root["limit"] = limit;
+    return root;
+}
+
+bool SyncRequest::FromJson(const Json::Value& root) {
+    last_private_id = root.get("last_private_id", 0).asUInt();
+    limit = root.get("limit", 200).asInt();
+    return true;
+}
+
+Json::Value SyncResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "sync_response";
+    root["success"] = success;
+    root["message"] = message;
+    root["last_msg_id"] = static_cast<Json::UInt>(last_msg_id);
+    root["has_more"] = has_more;
+
+    Json::Value arr(Json::arrayValue);
+    for (const auto& m : messages) {
+        arr.append(m.ToJson());
+    }
+    root["messages"] = arr;
+    return root;
+}
+
+bool SyncResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    last_msg_id = root.get("last_msg_id", 0).asUInt();
+    has_more = root.get("has_more", false).asBool();
+    messages.clear();
+
+    const Json::Value& arr = root["messages"];
+    if (arr.isArray()) {
+        for (const auto& item : arr) {
+            PrivateMessage m;
+            if (m.FromJson(item)) {
+                messages.push_back(std::move(m));
+            }
+        }
+    }
     return true;
 }
