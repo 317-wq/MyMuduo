@@ -114,9 +114,19 @@ enum class MessageType : uint16_t {
     kChatMessage    = 10,
     kPrivateMessage = 11,
     kPrivateMessageAck = 12,
+    kPrivateHistoryRequest = 13,
+    kPrivateHistoryResponse = 14,
+    kUnreadRequest = 15,
+    kUnreadResponse = 16,
+    kMarkReadRequest = 17,
+    kMarkReadResponse = 18,
 
     // 系统 (20)
     kSystemMessage = 20,
+
+    // 离线同步 (21-22)
+    kSyncRequest  = 21,
+    kSyncResponse = 22,
 
     // 登出 (30-31)
     kLogoutRequest  = 30,
@@ -172,8 +182,16 @@ enum class MessageType : uint16_t {
 | 类型 | Body 字段 |
 |------|-----------|
 | `ChatMessage` | `user_id`, `username`, `content`, `timestamp` |
-| `PrivateMessage` | `msg_id`, `client_msg_id`, `from_user_id`, `from_username`, `to_user_id`, `content`, `timestamp` |
+| `PrivateMessage` | `msg_id`, `client_msg_id`, `from_user_id`, `from_username`, `to_user_id`, `content`, `timestamp`, `created_at` |
 | `PrivateMessageAck` | `client_msg_id`, `msg_id`, `success`, `message` |
+| `PrivateHistoryRequest` | `friend_id`, `after_id`, `limit` |
+| `PrivateHistoryResponse` | `success`, `message`, `friend_id`, `messages[]`（`msg_id/from_user_id/to_user_id/content/is_read/is_revoked/reply_to_id/reply_preview/created_at/updated_at`） |
+| `UnreadRequest` | `{type}` |
+| `UnreadResponse` | `success`, `total`, `counts{friend_id: count}` |
+| `MarkReadRequest` | `friend_id` |
+| `MarkReadResponse` | `success`, `message` |
+| `SyncRequest` | `last_private_id`, `limit` |
+| `SyncResponse` | `success`, `message`, `last_msg_id`, `has_more`, `messages[]`（`PrivateMessage`） |
 
 #### 系统类
 
