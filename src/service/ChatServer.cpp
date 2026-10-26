@@ -218,6 +218,14 @@ void ChatServer::Start()
         [this](auto& conn, auto msg, auto ts) {
             OnGroupList(conn, std::move(msg), ts);
         });
+    _dispatcher.Register(MessageType::kGroupMessage,
+        [this](auto& conn, auto msg, auto ts) {
+            OnGroupMessage(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kGroupHistoryRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnGroupHistory(conn, std::move(msg), ts);
+        });
 
     // 私聊消息
     _dispatcher.Register(MessageType::kPrivateMessage,
@@ -847,6 +855,114 @@ void ChatServer::OnGroupList(const TcpConnection::Ptr& conn,
                 item.my_role = g.my_role;
                 item.created_at = g.created_at;
                 resp.groups.push_back(std::move(item));
+            }
+            SendMessage(c, resp);
+        });
+}
+
+// ---------- 群消息 / 群历史 ----------
+void ChatServer::OnGroupMessage(const TcpConnection::Ptr& conn,
+                                Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<GroupMessage*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req || req->group_id == 0 || req->content.empty()) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：缺少群或内容"});
+        return;
+    }
+
+    const uint32_t group_id = req->group_id;
+    const uint32_t client_msg_id = req->client_msg_id;
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _group_service->SendGroupMessage(my_id, group_id, req->content,
+        [this, weak_conn, my_id, group_id, client_msg_id]
+        (int err, const std::string& message,
+         const GroupMessageRecord& record,
+         const std::vector<uint32_t>& members) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+
+            GroupMessageAck ack;
+            ack.group_id = group_id;
+            ack.client_msg_id = client_msg_id;
+            ack.msg_id = record.id;
+            ack.success = (err == 0);
+            ack.message = message;
+            SendMessage(c, ack);
+
+            if (err != 0) return;
+
+            GroupMessage push;
+            push.group_id = record.group_id;
+            push.msg_id = record.id;
+            push.client_msg_id = client_msg_id;
+            push.from_user_id = record.from_user_id;
+            push.from_username = record.from_username;
+            push.content = record.content;
+            push.timestamp = Timestamp::Now().MilliSecondsSinceEpoch();
+            push.created_at = record.created_at;
+
+            int delivered = 0;
+            for (uint32_t member_id : members) {
+                if (member_id == record.from_user_id) continue;
+                TcpConnection::Ptr target = GetConnectionByUserId(member_id);
+                if (target) {
+                    SendMessage(target, push);
+                    ++delivered;
+                }
+            }
+            LOG_INFO("GroupMessage delivered: msg_id=%u group=%u from=%u online=%d/%zu",
+                     record.id, group_id, my_id, delivered, members.size());
+        });
+}
+
+void ChatServer::OnGroupHistory(const TcpConnection::Ptr& conn,
+                                Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<GroupHistoryRequest*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req || req->group_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：缺少群 ID"});
+        return;
+    }
+
+    const uint32_t group_id = req->group_id;
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+
+    _group_service->GetGroupHistory(my_id, group_id, req->after_id, req->limit,
+        [this, weak_conn, group_id]
+        (int err, const std::string& message,
+         const std::vector<GroupMessageRecord>& records,
+         bool has_more, uint32_t last_msg_id) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+
+            GroupHistoryResponse resp;
+            resp.success = (err == 0);
+            resp.message = message;
+            resp.group_id = group_id;
+            resp.has_more = has_more;
+            resp.last_msg_id = last_msg_id;
+            for (const auto& r : records) {
+                GroupMessage m;
+                m.group_id = r.group_id;
+                m.msg_id = r.id;
+                m.from_user_id = r.from_user_id;
+                m.from_username = r.from_username;
+                m.content = r.content;
+                m.created_at = r.created_at;
+                resp.messages.push_back(std::move(m));
             }
             SendMessage(c, resp);
         });
