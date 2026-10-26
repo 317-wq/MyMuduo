@@ -14,6 +14,7 @@
 #include "proto/MessageType.h"
 
 #include <jsoncpp/json/json.h>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -156,6 +157,7 @@ public:
     uint32_t to_user_id = 0;
     std::string content;
     int64_t timestamp = 0;
+    std::string created_at;   // 服务端入库时间，同步/推送展示用
 };
 
 // ---------- 私聊发送回执 ----------
@@ -169,6 +171,106 @@ public:
     uint32_t msg_id = 0;
     bool success = false;
     std::string message;
+};
+
+// ---------- 私聊历史 ----------
+class PrivateHistoryRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kPrivateHistoryRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t friend_id = 0;
+    uint32_t after_id = 0;   // 只拉 id > after_id 的消息；0 表示从头
+    int limit = 50;
+};
+
+class PrivateHistoryResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kPrivateHistoryResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+    uint32_t friend_id = 0;
+
+    struct Item {
+        uint32_t msg_id = 0;
+        uint32_t from_user_id = 0;
+        uint32_t to_user_id = 0;
+        std::string content;
+        bool is_read = false;
+        bool is_revoked = false;
+        uint32_t reply_to_id = 0;
+        std::string reply_preview;
+        std::string created_at;
+        std::string updated_at;
+    };
+    std::vector<Item> messages;
+};
+
+// ---------- 未读数 ----------
+class UnreadRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kUnreadRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+};
+
+class UnreadResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kUnreadResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    int total = 0;
+    std::map<uint32_t, int> counts;  // friend_id -> unread count
+};
+
+// ---------- 标记已读 ----------
+class MarkReadRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kMarkReadRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t friend_id = 0;
+};
+
+class MarkReadResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kMarkReadResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+};
+
+// ---------- 离线增量同步 ----------
+class SyncRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kSyncRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t last_private_id = 0;
+    int limit = 200;
+};
+
+class SyncResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kSyncResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+    uint32_t last_msg_id = 0;
+    bool has_more = false;
+    std::vector<PrivateMessage> messages;
 };
 
 // ---------- 系统消息（服务器推送） ----------
