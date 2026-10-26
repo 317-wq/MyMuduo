@@ -154,6 +154,12 @@ enum class MessageType : uint16_t {
     kGroupListRequest    = 56,
     kGroupListResponse   = 57,
 
+    // 群消息 / 历史 (58-61)
+    kGroupMessage        = 58,
+    kGroupMessageAck     = 59,
+    kGroupHistoryRequest = 60,
+    kGroupHistoryResponse = 61,
+
     // 错误 (99)
     kError = 99,
 
@@ -161,7 +167,7 @@ enum class MessageType : uint16_t {
 };
 ```
 
-类型编号按功能域分段：心跳 0、登录 1-9、聊天 10-19、系统 20-29、登出 30-39、好友 40-49、群聊 50-57，便于扩展。
+类型编号按功能域分段：心跳 0、登录 1-9、聊天 10-19、系统 20-29、登出 30-39、好友 40-49、群聊 50-61，便于扩展。
 
 ### 3.2 消息类型总览
 
@@ -243,6 +249,10 @@ enum class MessageType : uint16_t {
 | `LeaveGroupResponse` | — | `success`, `message` |
 | `GroupListRequest` | (空) | — |
 | `GroupListResponse` | — | `success`, `message`, `groups: [{group_id, name, owner_id, member_count, my_role, created_at}]` |
+| `GroupMessage` | `group_id`, `msg_id`, `client_msg_id`, `from_user_id`, `from_username`, `content`, `timestamp`, `created_at` |
+| `GroupMessageAck` | — | `group_id`, `client_msg_id`, `msg_id`, `success`, `message` |
+| `GroupHistoryRequest` | `group_id`, `after_id`, `limit` | — |
+| `GroupHistoryResponse` | — | `success`, `message`, `group_id`, `last_msg_id`, `has_more`, `messages[]`（`GroupMessage`） |
 
 #### 错误类
 
