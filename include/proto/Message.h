@@ -356,6 +356,61 @@ public:
     std::vector<Item> groups;
 };
 
+// ---------- 群消息 / 历史 ----------
+class GroupMessage : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupMessage; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t group_id = 0;
+    uint32_t msg_id = 0;
+    uint32_t client_msg_id = 0;
+    uint32_t from_user_id = 0;
+    std::string from_username;
+    std::string content;
+    int64_t timestamp = 0;
+    std::string created_at;
+};
+
+class GroupMessageAck : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupMessageAck; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t group_id = 0;
+    uint32_t client_msg_id = 0;
+    uint32_t msg_id = 0;
+    bool success = false;
+    std::string message;
+};
+
+class GroupHistoryRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupHistoryRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    uint32_t group_id = 0;
+    uint32_t after_id = 0;
+    int limit = 50;
+};
+
+class GroupHistoryResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupHistoryResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+
+    bool success = false;
+    std::string message;
+    uint32_t group_id = 0;
+    uint32_t last_msg_id = 0;
+    bool has_more = false;
+    std::vector<GroupMessage> messages;
+};
+
 // ---------- 系统消息（服务器推送） ----------
 class SystemMessage : public Message {
 public:
