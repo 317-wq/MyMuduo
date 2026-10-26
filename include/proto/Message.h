@@ -273,6 +273,89 @@ public:
     std::vector<PrivateMessage> messages;
 };
 
+// ---------- 群聊基础 ----------
+class CreateGroupRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kCreateGroupRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    std::string name;
+};
+
+class CreateGroupResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kCreateGroupResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    bool success = false;
+    std::string message;
+    uint32_t group_id = 0;
+};
+
+class JoinGroupRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kJoinGroupRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    uint32_t group_id = 0;
+};
+
+class JoinGroupResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kJoinGroupResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    bool success = false;
+    std::string message;
+    uint32_t group_id = 0;
+    std::string group_name;
+    int member_count = 0;
+    int my_role = 0;
+};
+
+class LeaveGroupRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kLeaveGroupRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    uint32_t group_id = 0;
+};
+
+class LeaveGroupResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kLeaveGroupResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    bool success = false;
+    std::string message;
+};
+
+class GroupListRequest : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupListRequest; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+};
+
+class GroupListResponse : public Message {
+public:
+    MessageType GetType() const override { return MessageType::kGroupListResponse; }
+    Json::Value ToJson() const override;
+    bool FromJson(const Json::Value& root) override;
+    bool success = false;
+    std::string message;
+
+    struct Item {
+        uint32_t group_id = 0;
+        std::string name;
+        uint32_t owner_id = 0;
+        int member_count = 0;
+        int my_role = 0;
+        std::string created_at;
+    };
+    std::vector<Item> groups;
+};
+
 // ---------- 系统消息（服务器推送） ----------
 class SystemMessage : public Message {
 public:
