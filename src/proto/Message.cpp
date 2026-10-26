@@ -68,6 +68,22 @@ Message::Ptr Message::Create(MessageType type) {
             return std::make_shared<SyncRequest>();
         case MessageType::kSyncResponse:
             return std::make_shared<SyncResponse>();
+        case MessageType::kCreateGroupRequest:
+            return std::make_shared<CreateGroupRequest>();
+        case MessageType::kCreateGroupResponse:
+            return std::make_shared<CreateGroupResponse>();
+        case MessageType::kJoinGroupRequest:
+            return std::make_shared<JoinGroupRequest>();
+        case MessageType::kJoinGroupResponse:
+            return std::make_shared<JoinGroupResponse>();
+        case MessageType::kLeaveGroupRequest:
+            return std::make_shared<LeaveGroupRequest>();
+        case MessageType::kLeaveGroupResponse:
+            return std::make_shared<LeaveGroupResponse>();
+        case MessageType::kGroupListRequest:
+            return std::make_shared<GroupListRequest>();
+        case MessageType::kGroupListResponse:
+            return std::make_shared<GroupListResponse>();
         case MessageType::kSystemMessage:
             return std::make_shared<SystemMessage>();
         case MessageType::kLogoutRequest:
@@ -815,6 +831,149 @@ bool SyncResponse::FromJson(const Json::Value& root) {
             if (m.FromJson(item)) {
                 messages.push_back(std::move(m));
             }
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// 群聊基础
+// ============================================================
+
+Json::Value CreateGroupRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "create_group_request";
+    root["name"] = name;
+    return root;
+}
+
+bool CreateGroupRequest::FromJson(const Json::Value& root) {
+    name = root.get("name", "").asString();
+    return true;
+}
+
+Json::Value CreateGroupResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "create_group_response";
+    root["success"] = success;
+    root["message"] = message;
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    return root;
+}
+
+bool CreateGroupResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    group_id = root.get("group_id", 0).asUInt();
+    return true;
+}
+
+Json::Value JoinGroupRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "join_group_request";
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    return root;
+}
+
+bool JoinGroupRequest::FromJson(const Json::Value& root) {
+    group_id = root.get("group_id", 0).asUInt();
+    return true;
+}
+
+Json::Value JoinGroupResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "join_group_response";
+    root["success"] = success;
+    root["message"] = message;
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    root["group_name"] = group_name;
+    root["member_count"] = member_count;
+    root["my_role"] = my_role;
+    return root;
+}
+
+bool JoinGroupResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    group_id = root.get("group_id", 0).asUInt();
+    group_name = root.get("group_name", "").asString();
+    member_count = root.get("member_count", 0).asInt();
+    my_role = root.get("my_role", 0).asInt();
+    return true;
+}
+
+Json::Value LeaveGroupRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "leave_group_request";
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    return root;
+}
+
+bool LeaveGroupRequest::FromJson(const Json::Value& root) {
+    group_id = root.get("group_id", 0).asUInt();
+    return true;
+}
+
+Json::Value LeaveGroupResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "leave_group_response";
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool LeaveGroupResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    return true;
+}
+
+Json::Value GroupListRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_list_request";
+    return root;
+}
+
+bool GroupListRequest::FromJson(const Json::Value& root) {
+    (void)root;
+    return true;
+}
+
+Json::Value GroupListResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_list_response";
+    root["success"] = success;
+    root["message"] = message;
+    Json::Value arr(Json::arrayValue);
+    for (const auto& g : groups) {
+        Json::Value item;
+        item["group_id"] = static_cast<Json::UInt>(g.group_id);
+        item["name"] = g.name;
+        item["owner_id"] = static_cast<Json::UInt>(g.owner_id);
+        item["member_count"] = g.member_count;
+        item["my_role"] = g.my_role;
+        item["created_at"] = g.created_at;
+        arr.append(item);
+    }
+    root["groups"] = arr;
+    return root;
+}
+
+bool GroupListResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    groups.clear();
+    const Json::Value& arr = root["groups"];
+    if (arr.isArray()) {
+        for (const auto& v : arr) {
+            Item g;
+            g.group_id = v.get("group_id", 0).asUInt();
+            g.name = v.get("name", "").asString();
+            g.owner_id = v.get("owner_id", 0).asUInt();
+            g.member_count = v.get("member_count", 0).asInt();
+            g.my_role = v.get("my_role", 0).asInt();
+            g.created_at = v.get("created_at", "").asString();
+            groups.push_back(std::move(g));
         }
     }
     return true;
