@@ -59,6 +59,16 @@ enum class MessageType : uint16_t {
     kFriendListRequest = 48,
     kFriendListResponse = 49,
 
+    // 群聊基础
+    kCreateGroupRequest  = 50,
+    kCreateGroupResponse = 51,
+    kJoinGroupRequest    = 52,
+    kJoinGroupResponse   = 53,
+    kLeaveGroupRequest   = 54,
+    kLeaveGroupResponse  = 55,
+    kGroupListRequest    = 56,
+    kGroupListResponse   = 57,
+
     // 登出
     kLogoutRequest = 30,
     kLogoutResponse = 31,
@@ -102,6 +112,14 @@ inline const char* MessageTypeName(MessageType type) {
         case MessageType::kDeleteFriendResponse:return "DeleteFriendResponse";
         case MessageType::kFriendListRequest:   return "FriendListRequest";
         case MessageType::kFriendListResponse:  return "FriendListResponse";
+        case MessageType::kCreateGroupRequest:  return "CreateGroupRequest";
+        case MessageType::kCreateGroupResponse: return "CreateGroupResponse";
+        case MessageType::kJoinGroupRequest:    return "JoinGroupRequest";
+        case MessageType::kJoinGroupResponse:   return "JoinGroupResponse";
+        case MessageType::kLeaveGroupRequest:   return "LeaveGroupRequest";
+        case MessageType::kLeaveGroupResponse:  return "LeaveGroupResponse";
+        case MessageType::kGroupListRequest:    return "GroupListRequest";
+        case MessageType::kGroupListResponse:   return "GroupListResponse";
         case MessageType::kLogoutRequest:    return "LogoutRequest";
         case MessageType::kLogoutResponse:   return "LogoutResponse";
         case MessageType::kError:            return "Error";
