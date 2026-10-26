@@ -31,6 +31,7 @@
 #include "cache/RedisCache.h"
 #include "service/UserService.h"
 #include "service/FriendService.h"
+#include "service/GroupService.h"
 #include "net/TcpServer.h"
 #include "net/EventLoop.h"
 #include "net/TcpConnection.h"
@@ -88,6 +89,12 @@ private:
     void OnDeleteFriend(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
     void OnFriendList(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
 
+    // 群聊基础
+    void OnCreateGroup(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnJoinGroup(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnLeaveGroup(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+    void OnGroupList(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
+
     // 私聊消息
     void OnPrivateMessage(const TcpConnection::Ptr& conn, Message::Ptr msg, Timestamp ts);
     // 私聊历史 / 未读 / 已读
@@ -113,6 +120,7 @@ private:
     std::unique_ptr<RedisCache> _redis;
     std::unique_ptr<UserService> _user_service;
     std::unique_ptr<FriendService> _friend_service;
+    std::unique_ptr<GroupService> _group_service;
     std::unique_ptr<TcpServer> _server;
     Codec _codec;
     Dispatcher _dispatcher;
