@@ -54,6 +54,27 @@ CREATE TABLE IF NOT EXISTS friends (
     INDEX idx_friend_status (friend_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 群聊基础表
+CREATE TABLE IF NOT EXISTS chat_groups (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(64) NOT NULL,
+    owner_id    INT UNSIGNED NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_owner (owner_id),
+    INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 群成员表：联合主键保证一个用户在一个群里只有一条记录
+CREATE TABLE IF NOT EXISTS group_members (
+    group_id   INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    role       TINYINT NOT NULL DEFAULT 0 COMMENT '0=member, 1=owner',
+    joined_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 私聊消息表
 CREATE TABLE IF NOT EXISTS private_messages (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
