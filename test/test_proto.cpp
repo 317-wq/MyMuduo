@@ -264,6 +264,84 @@ TEST(MessageTest, PrivateHistory) {
     EXPECT_EQ(resp2.messages[0].content, "hello");
 }
 
+TEST(MessageTest, GroupCreateJoin) {
+    CreateGroupRequest create;
+    create.name = "dev-group";
+    std::string create_json = create.ToJsonString();
+    CreateGroupRequest create2;
+    EXPECT_TRUE(create2.FromJsonString(create_json));
+    EXPECT_EQ(create2.name, "dev-group");
+
+    CreateGroupResponse created;
+    created.success = true;
+    created.message = "创建成功";
+    created.group_id = 7;
+    std::string created_json = created.ToJsonString();
+    CreateGroupResponse created2;
+    EXPECT_TRUE(created2.FromJsonString(created_json));
+    EXPECT_TRUE(created2.success);
+    EXPECT_EQ(created2.group_id, 7);
+
+    JoinGroupRequest join;
+    join.group_id = 7;
+    std::string join_json = join.ToJsonString();
+    JoinGroupRequest join2;
+    EXPECT_TRUE(join2.FromJsonString(join_json));
+    EXPECT_EQ(join2.group_id, 7);
+
+    JoinGroupResponse joined;
+    joined.success = true;
+    joined.group_id = 7;
+    joined.group_name = "dev-group";
+    joined.member_count = 3;
+    joined.my_role = 0;
+    std::string joined_json = joined.ToJsonString();
+    JoinGroupResponse joined2;
+    EXPECT_TRUE(joined2.FromJsonString(joined_json));
+    EXPECT_TRUE(joined2.success);
+    EXPECT_EQ(joined2.group_name, "dev-group");
+    EXPECT_EQ(joined2.member_count, 3);
+}
+
+TEST(MessageTest, GroupLeaveList) {
+    LeaveGroupRequest leave;
+    leave.group_id = 7;
+    std::string leave_json = leave.ToJsonString();
+    LeaveGroupRequest leave2;
+    EXPECT_TRUE(leave2.FromJsonString(leave_json));
+    EXPECT_EQ(leave2.group_id, 7);
+
+    LeaveGroupResponse left;
+    left.success = true;
+    left.message = "已退群";
+    std::string left_json = left.ToJsonString();
+    LeaveGroupResponse left2;
+    EXPECT_TRUE(left2.FromJsonString(left_json));
+    EXPECT_TRUE(left2.success);
+
+    GroupListRequest list;
+    std::string list_json = list.ToJsonString();
+    GroupListRequest list2;
+    EXPECT_TRUE(list2.FromJsonString(list_json));
+
+    GroupListResponse groups;
+    groups.success = true;
+    GroupListResponse::Item item;
+    item.group_id = 7;
+    item.name = "dev-group";
+    item.owner_id = 1;
+    item.member_count = 3;
+    item.my_role = 1;
+    groups.groups.push_back(item);
+    std::string groups_json = groups.ToJsonString();
+    GroupListResponse groups2;
+    EXPECT_TRUE(groups2.FromJsonString(groups_json));
+    EXPECT_TRUE(groups2.success);
+    ASSERT_EQ(groups2.groups.size(), 1u);
+    EXPECT_EQ(groups2.groups[0].group_id, 7);
+    EXPECT_EQ(groups2.groups[0].member_count, 3);
+}
+
 TEST(MessageTest, Sync) {
     SyncRequest req;
     req.last_private_id = 100;
