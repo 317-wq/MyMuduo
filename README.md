@@ -14,7 +14,7 @@
 - epoll **ET**、**One Loop Per Thread**、eventfd 跨线程唤醒、timerfd + 时间轮双定时器
 - 自定义二进制协议：4 字节 length + 2 字节 type + JSON body，处理半包 / 粘包
 - MySQL 连接池 + 异步 DB worker，Redis（redis++）缓存 + Cache-Aside
-- 业务：注册 / 登录、好友、私聊落库 + `msg_id`/ack、历史/未读/已读、离线增量同步、群聊基础、在线状态、心跳、连接超时
+- 业务：注册 / 登录、好友、私聊落库 + `msg_id`/ack、历史/未读/已读、离线增量同步、群聊基础、群消息 fanout、群历史、在线状态、心跳、连接超时
 
 ## 架构
 
@@ -61,7 +61,7 @@ worker io_loop × N
 - 6 字节头：`body_length(4) + msg_type(2)`，网络字节序
 - body 上限 64KB
 - 半包 / 粘包处理，消息工厂 + Dispatcher
-- 52 个协议单元测试
+- 53 个协议单元测试
 
 ### 存储层
 
@@ -79,6 +79,7 @@ worker io_loop × N
 - 私聊历史（after_id 增量）、未读数、标记已读
 - 登录后离线增量同步（`SyncRequest` + `last_private_id`，分页 `has_more`）
 - 群聊基础：建群（群主自动入群）、加群、退群、群列表
+- 群消息：先落库、在线成员 fanout、群历史（after_id 增量）
 - 在线状态、心跳、连接超时
 - 单会话登录 / 登出身份校验
 
@@ -86,7 +87,8 @@ worker io_loop × N
 
 - 离线同步是 at-least-once：push 与 sync 可能重复，客户端需按 `msg_id` 去重
 - 历史 `after_id=0` 从最早消息开始，不是“最近 N 条”；聊天页首次加载还需要倒序/`before_id`
-- 群聊只有建群/加群/退群/列表，**群消息 / fanout / 群历史未实现**；MVP 为开放加入，没有邀请/审批/管理员
+- 群消息只做在线 fanout + 群历史；**群离线同步 / 群未读 / 群已读** 未实现（F06 可选）
+- MVP 为开放加入，没有邀请/审批/管理员；群主不能退群
 - 没有消息去重、已读回执（私聊已读是整会话标记）
 - 单会话；不支持多端同时在线
 - 协议 body 是 JSON，没有协议版本字段
@@ -148,7 +150,7 @@ ctest --output-on-failure
 
 | CTest 名称 | 用例数 | 覆盖 |
 |---|---:|---|
-| `proto` | 52 | 协议头、消息序列化、Codec 半包/粘包、Dispatcher |
+| `proto` | 53 | 协议头、消息序列化、Codec 半包/粘包、Dispatcher |
 | `tcp_lifecycle` | 4 | ET accept/write、半关闭、连接关闭回收 |
 | `server_boundaries` | 3 | `timeout=0`、端口占用、启动错误传递 |
 
@@ -232,7 +234,7 @@ v1.1：
 - [x] F02 私聊历史 / 未读 / 已读
 - [x] F03 离线增量同步
 - [x] F04 群聊基础
-- [ ] F05 群消息 / fanout / 历史
+- [x] F05 群消息 / fanout / 历史
 - [ ] F07 CLI 测试客户端 + 集成测试
 - [ ] F08 压测 / ASan / CI / 面试讲稿
 
