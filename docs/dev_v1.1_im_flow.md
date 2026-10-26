@@ -5,7 +5,7 @@
 | 版本 | v1.1-im-flow |
 | 基线 | v1.0 主线 8/8（`e5459e3`） |
 | 目标 | 服务端-only；用一条可演示的 IM 业务线串起网络、协议、存储和可靠性 |
-| 进度 | **1 / 8** |
+| 进度 | **3 / 8** |
 
 ## 0. 面试主线
 
@@ -48,16 +48,18 @@
   - 验证（2026-10-24）：临时协议客户端实测 ack `msg_id=33`、push 一致；非好友 ack 失败；B 登出后 A 发送仍落库（`msg_id=34`，提示离线）；DB 中 A→B 两条、C→A 零条。
   - 面试：为什么先落库再推送；ack 与重发；离线消息为什么不能只靠 push。
 
-- [ ] **F02 私聊历史 / 未读 / 已读**
+- [x] **F02 私聊历史 / 未读 / 已读**（完成：2026-10-24）
   - 协议：`PrivateHistoryRequest/Response`、`UnreadRequest/Response`、`MarkReadRequest/Response`。
   - DB：复用 `GetConversation/MarkAsRead/GetUnreadCounts`。
   - 测试：分页/after_id、未读数、已读后归零。
+  - 验证（2026-10-24）：A 发两条给 B；B 拉历史得到 `msg_id=37,38`；未读 `total=2`（A→2）；标记已读后 `total=0`；`after_id=37` 只返回 38。
   - 面试：增量拉取 vs 全量分页；未读计数放 MySQL 还是 Redis。
 
-- [ ] **F03 离线增量同步**
+- [x] **F03 离线增量同步**（完成：2026-10-24）
   - 协议：`SyncRequest(last_private_id)` → `SyncResponse(messages)`。
   - 流程：登录成功后客户端主动 sync；按 `msg_id` 去重；不采用“登录瞬间推送全部离线消息”。
   - 测试：B 离线 → A 发消息 → B 登录 sync，拿到缺失消息且不重复。
+  - 验证（2026-10-24）：B 离线时 A 发 3 条；B 登录后 `limit=2` 分页 sync 得到 2 条 + `has_more=true`，再拉得到第 3 条；A 在线再发第 4 条，push 与 sync 都会出现，客户端按 `msg_id` 去重；无新消息时 `last_msg_id` 保持。
   - 面试：at-least-once + 客户端去重；sync 的幂等性。
 
 - [ ] **F04 群聊基础**
@@ -112,4 +114,4 @@ F01/F02/F03 是一条连续的消息可靠性线；F04/F05 是群聊线；F07 �
 
 | 版本 | 日期 | 主题 | 状态 |
 |---|---|---|---|
-| v1.1 | 2026-10-24 | IM 业务线（F01–F08） | 进行中 1/8 |
+| v1.1 | 2026-10-24 | IM 业务线（F01–F08） | 进行中 3/8 |
