@@ -125,6 +125,9 @@ void ChatServer::Start()
         _friend_service->SetRedisCache(_redis.get());
     }
 
+    // 初始化群聊服务
+    _group_service = std::make_unique<GroupService>(_db.get(), _base_loop.get());
+
     // 3. 初始化 TcpServer
     _server = std::make_unique<TcpServer>(
         _base_loop.get(), static_cast<uint16_t>(_server_port),
@@ -196,6 +199,24 @@ void ChatServer::Start()
     _dispatcher.Register(MessageType::kFriendListRequest,
         [this](auto& conn, auto msg, auto ts) {
             OnFriendList(conn, std::move(msg), ts);
+        });
+
+    // 群聊基础
+    _dispatcher.Register(MessageType::kCreateGroupRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnCreateGroup(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kJoinGroupRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnJoinGroup(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kLeaveGroupRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnLeaveGroup(conn, std::move(msg), ts);
+        });
+    _dispatcher.Register(MessageType::kGroupListRequest,
+        [this](auto& conn, auto msg, auto ts) {
+            OnGroupList(conn, std::move(msg), ts);
         });
 
     // 私聊消息
@@ -700,6 +721,132 @@ void ChatServer::OnFriendList(const TcpConnection::Ptr& conn,
                 item.remark = f.remark;
                 item.online = f.online;
                 resp.friends.push_back(item);
+            }
+            SendMessage(c, resp);
+        });
+}
+
+// ---------- 群聊基础 ----------
+void ChatServer::OnCreateGroup(const TcpConnection::Ptr& conn,
+                               Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<CreateGroupRequest*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _group_service->CreateGroup(my_id, req->name,
+        [this, weak_conn](int err, const std::string& message, uint32_t group_id) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            CreateGroupResponse resp;
+            resp.success = (err == 0);
+            resp.message = message;
+            resp.group_id = group_id;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnJoinGroup(const TcpConnection::Ptr& conn,
+                             Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<JoinGroupRequest*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req || req->group_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：缺少群 ID"});
+        return;
+    }
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _group_service->JoinGroup(my_id, req->group_id,
+        [this, weak_conn](int err, const std::string& message, const GroupInfo& info) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            JoinGroupResponse resp;
+            resp.success = (err == 0);
+            resp.message = message;
+            resp.group_id = info.id;
+            resp.group_name = info.name;
+            resp.member_count = info.member_count;
+            resp.my_role = info.my_role;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnLeaveGroup(const TcpConnection::Ptr& conn,
+                              Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<LeaveGroupRequest*>(msg.get());
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+    if (!req || req->group_id == 0) {
+        SendMessage(conn, ErrorMessage{1, "参数错误：缺少群 ID"});
+        return;
+    }
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _group_service->LeaveGroup(my_id, req->group_id,
+        [this, weak_conn](int err, const std::string& message) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            LeaveGroupResponse resp;
+            resp.success = (err == 0);
+            resp.message = message;
+            SendMessage(c, resp);
+        });
+}
+
+void ChatServer::OnGroupList(const TcpConnection::Ptr& conn,
+                             Message::Ptr msg, Timestamp ts)
+{
+    (void)ts;
+    auto* req = dynamic_cast<GroupListRequest*>(msg.get());
+    if (!req) {
+        SendMessage(conn, ErrorMessage{1, "参数错误"});
+        return;
+    }
+
+    uint32_t my_id = GetUserIdByFd(conn->Fd());
+    if (my_id == 0) {
+        SendMessage(conn, ErrorMessage{2, "请先登录"});
+        return;
+    }
+
+    std::weak_ptr<TcpConnection> weak_conn = conn;
+    _group_service->ListGroups(my_id,
+        [this, weak_conn](int err, const std::string& message,
+                          const std::vector<GroupInfo>& groups) {
+            auto c = weak_conn.lock();
+            if (!c) return;
+            GroupListResponse resp;
+            resp.success = (err == 0);
+            resp.message = message;
+            for (const auto& g : groups) {
+                GroupListResponse::Item item;
+                item.group_id = g.id;
+                item.name = g.name;
+                item.owner_id = g.owner_id;
+                item.member_count = g.member_count;
+                item.my_role = g.my_role;
+                item.created_at = g.created_at;
+                resp.groups.push_back(std::move(item));
             }
             SendMessage(c, resp);
         });
