@@ -63,6 +63,7 @@ set(DB_SRCS
     src/db/ConnectionPool.cpp
     src/db/FriendDao.cpp
     src/db/PrivateMessageDao.cpp
+    src/db/GroupDao.cpp
 )
 
 # 业务层源文件
@@ -71,6 +72,7 @@ set(SERVICE_SRCS
     src/service/ChatServer.cpp
     src/service/EmailSender.cpp
     src/service/FriendService.cpp
+    src/service/GroupService.cpp
 )
 
 # 基础工具源文件
