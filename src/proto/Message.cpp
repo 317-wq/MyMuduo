@@ -84,6 +84,14 @@ Message::Ptr Message::Create(MessageType type) {
             return std::make_shared<GroupListRequest>();
         case MessageType::kGroupListResponse:
             return std::make_shared<GroupListResponse>();
+        case MessageType::kGroupMessage:
+            return std::make_shared<GroupMessage>();
+        case MessageType::kGroupMessageAck:
+            return std::make_shared<GroupMessageAck>();
+        case MessageType::kGroupHistoryRequest:
+            return std::make_shared<GroupHistoryRequest>();
+        case MessageType::kGroupHistoryResponse:
+            return std::make_shared<GroupHistoryResponse>();
         case MessageType::kSystemMessage:
             return std::make_shared<SystemMessage>();
         case MessageType::kLogoutRequest:
@@ -974,6 +982,110 @@ bool GroupListResponse::FromJson(const Json::Value& root) {
             g.my_role = v.get("my_role", 0).asInt();
             g.created_at = v.get("created_at", "").asString();
             groups.push_back(std::move(g));
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// 群消息 / 历史
+// ============================================================
+
+Json::Value GroupMessage::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_message";
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    root["msg_id"] = static_cast<Json::UInt>(msg_id);
+    root["client_msg_id"] = static_cast<Json::UInt>(client_msg_id);
+    root["from_user_id"] = static_cast<Json::UInt>(from_user_id);
+    root["from_username"] = from_username;
+    root["content"] = content;
+    root["timestamp"] = static_cast<Json::Int64>(timestamp);
+    root["created_at"] = created_at;
+    return root;
+}
+
+bool GroupMessage::FromJson(const Json::Value& root) {
+    if (!root.isMember("content")) return false;
+    group_id = root.get("group_id", 0).asUInt();
+    msg_id = root.get("msg_id", 0).asUInt();
+    client_msg_id = root.get("client_msg_id", 0).asUInt();
+    from_user_id = root.get("from_user_id", 0).asUInt();
+    from_username = root.get("from_username", "").asString();
+    content = root["content"].asString();
+    timestamp = root.get("timestamp", 0).asInt64();
+    created_at = root.get("created_at", "").asString();
+    return true;
+}
+
+Json::Value GroupMessageAck::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_message_ack";
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    root["client_msg_id"] = static_cast<Json::UInt>(client_msg_id);
+    root["msg_id"] = static_cast<Json::UInt>(msg_id);
+    root["success"] = success;
+    root["message"] = message;
+    return root;
+}
+
+bool GroupMessageAck::FromJson(const Json::Value& root) {
+    group_id = root.get("group_id", 0).asUInt();
+    client_msg_id = root.get("client_msg_id", 0).asUInt();
+    msg_id = root.get("msg_id", 0).asUInt();
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    return true;
+}
+
+Json::Value GroupHistoryRequest::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_history_request";
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    root["after_id"] = static_cast<Json::UInt>(after_id);
+    root["limit"] = limit;
+    return root;
+}
+
+bool GroupHistoryRequest::FromJson(const Json::Value& root) {
+    group_id = root.get("group_id", 0).asUInt();
+    after_id = root.get("after_id", 0).asUInt();
+    limit = root.get("limit", 50).asInt();
+    return true;
+}
+
+Json::Value GroupHistoryResponse::ToJson() const {
+    Json::Value root;
+    root["type"] = "group_history_response";
+    root["success"] = success;
+    root["message"] = message;
+    root["group_id"] = static_cast<Json::UInt>(group_id);
+    root["last_msg_id"] = static_cast<Json::UInt>(last_msg_id);
+    root["has_more"] = has_more;
+
+    Json::Value arr(Json::arrayValue);
+    for (const auto& m : messages) {
+        arr.append(m.ToJson());
+    }
+    root["messages"] = arr;
+    return root;
+}
+
+bool GroupHistoryResponse::FromJson(const Json::Value& root) {
+    success = root.get("success", false).asBool();
+    message = root.get("message", "").asString();
+    group_id = root.get("group_id", 0).asUInt();
+    last_msg_id = root.get("last_msg_id", 0).asUInt();
+    has_more = root.get("has_more", false).asBool();
+    messages.clear();
+
+    const Json::Value& arr = root["messages"];
+    if (arr.isArray()) {
+        for (const auto& item : arr) {
+            GroupMessage m;
+            if (m.FromJson(item)) {
+                messages.push_back(std::move(m));
+            }
         }
     }
     return true;
