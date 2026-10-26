@@ -158,6 +158,61 @@ bool PrivateMessageDao::GetConversation(sql::Connection* conn,
 }
 
 // ============================================================
+// 离线增量同步：发给当前用户、id > after_id
+// ============================================================
+
+bool PrivateMessageDao::GetIncomingAfter(sql::Connection* conn,
+                                         uint32_t user_id, uint32_t after_id,
+                                         int limit,
+                                         std::vector<PrivateMessageRecord>& out,
+                                         bool& has_more)
+{
+    out.clear();
+    has_more = false;
+    if (limit <= 0) limit = 200;
+
+    std::string sql =
+        "SELECT m.id, m.from_user_id, m.to_user_id, m.content, "
+        "m.is_read, m.is_revoked, "
+        "IFNULL(m.reply_to_id, 0) AS reply_to_id, "
+        "IFNULL(m.reply_preview, '') AS reply_preview, "
+        "m.created_at, m.updated_at, "
+        "IFNULL(u.username, '') AS from_username "
+        "FROM private_messages m "
+        "LEFT JOIN users u ON u.id = m.from_user_id "
+        "WHERE m.to_user_id = ? AND m.id > ? "
+        "ORDER BY m.id ASC LIMIT ?";
+
+    std::unique_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(sql));
+    stmt->setUInt(1, user_id);
+    stmt->setUInt(2, after_id);
+    stmt->setInt(3, limit + 1);
+
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next()) {
+        PrivateMessageRecord msg;
+        msg.id            = rs->getUInt("id");
+        msg.from_user_id  = rs->getUInt("from_user_id");
+        msg.from_username = rs->getString("from_username");
+        msg.to_user_id    = rs->getUInt("to_user_id");
+        msg.content       = rs->getString("content");
+        msg.is_read       = rs->getBoolean("is_read");
+        msg.is_revoked    = rs->getBoolean("is_revoked");
+        msg.reply_to_id   = rs->getUInt("reply_to_id");
+        msg.reply_preview = rs->getString("reply_preview");
+        msg.created_at    = rs->getString("created_at");
+        msg.updated_at    = rs->getString("updated_at");
+        out.push_back(std::move(msg));
+    }
+
+    if (static_cast<int>(out.size()) > limit) {
+        out.pop_back();
+        has_more = true;
+    }
+    return true;
+}
+
+// ============================================================
 // 撤回消息
 // ============================================================
 
