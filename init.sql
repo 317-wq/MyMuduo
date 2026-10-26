@@ -75,6 +75,19 @@ CREATE TABLE IF NOT EXISTS group_members (
     INDEX idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 群消息表
+CREATE TABLE IF NOT EXISTS group_messages (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    group_id     INT UNSIGNED NOT NULL,
+    from_user_id INT UNSIGNED NOT NULL,
+    content      TEXT NOT NULL,
+    is_revoked   TINYINT NOT NULL DEFAULT 0 COMMENT '0=正常, 1=已撤回',
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_group (group_id, id),
+    INDEX idx_from (from_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 私聊消息表
 CREATE TABLE IF NOT EXISTS private_messages (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
