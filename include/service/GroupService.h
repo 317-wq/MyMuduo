@@ -26,6 +26,12 @@ public:
     using LeaveCallback = std::function<void(int, const std::string&)>;
     using ListCallback = std::function<void(int, const std::string&,
                                             const std::vector<GroupInfo>&)>;
+    using SendMessageCallback = std::function<void(int, const std::string&,
+                                                   const GroupMessageRecord&,
+                                                   const std::vector<uint32_t>&)>;
+    using HistoryCallback = std::function<void(int, const std::string&,
+                                               const std::vector<GroupMessageRecord>&,
+                                               bool has_more, uint32_t last_msg_id)>;
 
     GroupService(Database* db, EventLoop* loop)
         : _db(db), _loop(loop) {}
@@ -37,6 +43,16 @@ public:
     void LeaveGroup(uint32_t user_id, uint32_t group_id,
                     LeaveCallback callback);
     void ListGroups(uint32_t user_id, ListCallback callback);
+
+    // 先校验成员，再落库；回调带成员 id 列表供 ChatServer 在线 fanout。
+    void SendGroupMessage(uint32_t user_id, uint32_t group_id,
+                          const std::string& content,
+                          SendMessageCallback callback);
+
+    // 群历史：只允许群成员查询。
+    void GetGroupHistory(uint32_t user_id, uint32_t group_id,
+                         uint32_t after_id, int limit,
+                         HistoryCallback callback);
 
 private:
     Database* _db;
