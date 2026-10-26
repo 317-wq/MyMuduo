@@ -22,6 +22,7 @@
 struct PrivateMessageRecord {
     uint32_t id = 0;
     uint32_t from_user_id = 0;
+    std::string from_username;   // 同步时 JOIN users 带出
     uint32_t to_user_id = 0;
     std::string content;
     bool is_read = false;
@@ -52,6 +53,14 @@ public:
                                std::vector<PrivateMessageRecord>& out,
                                std::vector<PrivateMessageRecord>& updates,
                                const std::string& updated_since = "");
+
+    // 拉取发给 user_id、且 id > after_id 的消息（离线增量同步）。
+    // has_more 表示还有下一批，客户端用返回的最后一个 id 继续拉。
+    static bool GetIncomingAfter(sql::Connection* conn,
+                                 uint32_t user_id, uint32_t after_id,
+                                 int limit,
+                                 std::vector<PrivateMessageRecord>& out,
+                                 bool& has_more);
 
     // 撤回消息（2分钟内，仅发送者）
     // 返回 true 表示撤回成功
