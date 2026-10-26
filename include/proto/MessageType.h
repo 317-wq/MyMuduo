@@ -69,6 +69,12 @@ enum class MessageType : uint16_t {
     kGroupListRequest    = 56,
     kGroupListResponse   = 57,
 
+    // 群消息 / 历史
+    kGroupMessage        = 58,
+    kGroupMessageAck     = 59,
+    kGroupHistoryRequest = 60,
+    kGroupHistoryResponse = 61,
+
     // 登出
     kLogoutRequest = 30,
     kLogoutResponse = 31,
@@ -120,6 +126,10 @@ inline const char* MessageTypeName(MessageType type) {
         case MessageType::kLeaveGroupResponse:  return "LeaveGroupResponse";
         case MessageType::kGroupListRequest:    return "GroupListRequest";
         case MessageType::kGroupListResponse:   return "GroupListResponse";
+        case MessageType::kGroupMessage:        return "GroupMessage";
+        case MessageType::kGroupMessageAck:     return "GroupMessageAck";
+        case MessageType::kGroupHistoryRequest: return "GroupHistoryRequest";
+        case MessageType::kGroupHistoryResponse:return "GroupHistoryResponse";
         case MessageType::kLogoutRequest:    return "LogoutRequest";
         case MessageType::kLogoutResponse:   return "LogoutResponse";
         case MessageType::kError:            return "Error";
