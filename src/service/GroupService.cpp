@@ -1,4 +1,5 @@
 #include "service/GroupService.h"
+#include "db/UserDao.h"
 
 #include <memory>
 
@@ -131,5 +132,96 @@ void GroupService::ListGroups(uint32_t user_id, ListCallback callback)
         },
         [callback, groups, error, msg]() {
             callback(*error, *msg, *groups);
+        });
+}
+
+// 群消息：成员校验 -> 落库 -> 取成员列表（在线 fanout 用）。
+void GroupService::SendGroupMessage(uint32_t user_id, uint32_t group_id,
+                                    const std::string& content,
+                                    SendMessageCallback callback)
+{
+    if (user_id == 0 || group_id == 0 || content.empty() || content.size() > 65535) {
+        callback(1, "参数错误", GroupMessageRecord{}, {});
+        return;
+    }
+
+    auto record = std::make_shared<GroupMessageRecord>();
+    auto members = std::make_shared<std::vector<uint32_t>>();
+    auto error = std::make_shared<int>(5);
+    auto msg = std::make_shared<std::string>("发送失败");
+
+    _db->Execute(_loop,
+        [user_id, group_id, content, record, members, error, msg](sql::Connection* conn) {
+            if (!GroupDao::IsMember(conn, group_id, user_id)) {
+                *error = 4;
+                *msg = "不在群里";
+                return;
+            }
+
+            UserInfo sender;
+            if (!UserDao::GetUserById(conn, user_id, sender)) {
+                *error = 5;
+                *msg = "发送者不存在";
+                return;
+            }
+
+            if (!GroupDao::SendGroupMessage(conn, group_id, user_id, content, record->id)) {
+                *error = 5;
+                *msg = "消息保存失败";
+                return;
+            }
+
+            record->group_id = group_id;
+            record->from_user_id = user_id;
+            record->from_username = sender.username;
+            record->content = content;
+
+            GroupDao::ListMemberIds(conn, group_id, *members);
+            *error = 0;
+            *msg = "发送成功";
+        },
+        [callback, record, members, error, msg]() {
+            callback(*error, *msg, *record, *members);
+        });
+}
+
+// 群历史：成员校验后按 id 增量查询。
+void GroupService::GetGroupHistory(uint32_t user_id, uint32_t group_id,
+                                   uint32_t after_id, int limit,
+                                   HistoryCallback callback)
+{
+    if (user_id == 0 || group_id == 0) {
+        callback(1, "参数错误", {}, false, after_id);
+        return;
+    }
+    if (limit <= 0) limit = 50;
+    if (limit > 200) limit = 200;
+
+    auto records = std::make_shared<std::vector<GroupMessageRecord>>();
+    auto has_more = std::make_shared<bool>(false);
+    auto last_msg_id = std::make_shared<uint32_t>(after_id);
+    auto error = std::make_shared<int>(5);
+    auto msg = std::make_shared<std::string>("查询失败");
+
+    _db->Execute(_loop,
+        [user_id, group_id, after_id, limit, records, has_more, last_msg_id, error, msg]
+        (sql::Connection* conn) {
+            if (!GroupDao::IsMember(conn, group_id, user_id)) {
+                *error = 4;
+                *msg = "不在群里";
+                return;
+            }
+            if (!GroupDao::GetGroupHistory(conn, group_id, after_id, limit,
+                                           *records, *has_more)) {
+                return;
+            }
+            for (const auto& r : *records) {
+                if (r.id > *last_msg_id) *last_msg_id = r.id;
+            }
+            *error = 0;
+            *msg = "ok";
+        },
+        [callback, records, has_more, last_msg_id, error, msg]() {
+            callback(*error, *msg, *records, *has_more, *last_msg_id);
         });
 }
