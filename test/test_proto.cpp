@@ -264,6 +264,61 @@ TEST(MessageTest, PrivateHistory) {
     EXPECT_EQ(resp2.messages[0].content, "hello");
 }
 
+TEST(MessageTest, GroupMessageHistory) {
+    GroupMessage msg;
+    msg.group_id = 7;
+    msg.msg_id = 101;
+    msg.client_msg_id = 1001;
+    msg.from_user_id = 1;
+    msg.from_username = "alice";
+    msg.content = "hello group";
+    msg.created_at = "2026-10-26 14:00:00";
+
+    std::string msg_json = msg.ToJsonString();
+    GroupMessage msg2;
+    EXPECT_TRUE(msg2.FromJsonString(msg_json));
+    EXPECT_EQ(msg2.group_id, 7);
+    EXPECT_EQ(msg2.msg_id, 101);
+    EXPECT_EQ(msg2.content, "hello group");
+    EXPECT_EQ(msg2.from_username, "alice");
+
+    GroupMessageAck ack;
+    ack.group_id = 7;
+    ack.client_msg_id = 1001;
+    ack.msg_id = 101;
+    ack.success = true;
+    ack.message = "发送成功";
+    std::string ack_json = ack.ToJsonString();
+    GroupMessageAck ack2;
+    EXPECT_TRUE(ack2.FromJsonString(ack_json));
+    EXPECT_EQ(ack2.msg_id, 101);
+    EXPECT_TRUE(ack2.success);
+
+    GroupHistoryRequest req;
+    req.group_id = 7;
+    req.after_id = 100;
+    req.limit = 20;
+    std::string req_json = req.ToJsonString();
+    GroupHistoryRequest req2;
+    EXPECT_TRUE(req2.FromJsonString(req_json));
+    EXPECT_EQ(req2.group_id, 7);
+    EXPECT_EQ(req2.after_id, 100);
+
+    GroupHistoryResponse resp;
+    resp.success = true;
+    resp.group_id = 7;
+    resp.last_msg_id = 101;
+    resp.has_more = false;
+    resp.messages.push_back(msg);
+    std::string resp_json = resp.ToJsonString();
+    GroupHistoryResponse resp2;
+    EXPECT_TRUE(resp2.FromJsonString(resp_json));
+    EXPECT_TRUE(resp2.success);
+    EXPECT_EQ(resp2.last_msg_id, 101);
+    ASSERT_EQ(resp2.messages.size(), 1u);
+    EXPECT_EQ(resp2.messages[0].content, "hello group");
+}
+
 TEST(MessageTest, GroupCreateJoin) {
     CreateGroupRequest create;
     create.name = "dev-group";
